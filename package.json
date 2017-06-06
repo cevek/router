@@ -1,0 +1,20 @@
+{
+  "name": "Router",
+  "version": "1.0.0",
+  "description": "",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/prop-types": "^15.5.1",
+    "@types/react": "^15.0.24",
+    "@types/react-dom": "^15.5.0",
+    "prop-types": "^15.5.8",
+    "react-prop-types": "^0.4.0"
+  }
+}
