@@ -1,1 +1,2 @@
 import './path';
+import './router';
