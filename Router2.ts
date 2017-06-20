@@ -48,7 +48,8 @@ export interface Transition {
 export class Router {
     protected routes: Route[];
     protected transition: Transition = {id: 1, url: '', bindings: [], urlParams: {}, searchParams: {}};
-    onUpdate = new Listerners();
+    beforeUpdate = new Listerners();
+    afterUpdate = new Listerners();
 
     changeUrl(url: string) {
         const r = this.findRoute(url);
@@ -64,13 +65,14 @@ export class Router {
             urlParams,
             searchParams,
         }
+        this.beforeUpdate.call(transition);
         this.resolveStack(Promise.resolve(), transition).then(() => {
             return this.leaveStack(transition, removeRouteStack);
         }).then(() => {
             if (transition.id === this.transition.id) {
                 this.transition = transition;
                 promise.resolve();
-                this.onUpdate.call(transition);
+                this.afterUpdate.call(transition);
             }
         }).catch(promise.reject);
         return promise.promise;
@@ -169,45 +171,50 @@ export interface PathPart {
 }
 
 export class Path {
-    regexp: RegExp;
-    parts: PathPart[];
-    regexpGroupNames: string[];
+    protected regexp: RegExp;
+    protected parts: PathPart[];
+    protected regexpGroupNames: string[];
+
+    constructor(pattern: string) {
+        this.compile(pattern);
+    }
 
     parse(path: string) {
         const m = path.match(this.regexp);
         if (m === null) return void 0;
         const params:{[name: string]: string} = {};
         for (let i = 1; i < m.length; i++) {
-            params[this.regexpGroupNames[i]] = m[i];
+            params[this.regexpGroupNames[i]] = decodeURIComponent(m[i] || '');
         }
         return params;
     }
 
-    compile(pattern: string) {
+    protected compile(pattern: string) {
         const groupNames = ['all'];
-        const re = /(\/?:[\w\d_]+(?:\\\?)?)/;
+        const re = /((?:\/?[^/:]*)?:[\w\d_]+(?:\\\?)?)/;
         const splitParts = escapeRegExp(pattern).split(re);
         const pathParts: PathPart[] = [];
-        let regexpStr = '';
+        let regexpStr = '^';
         for (let i = 0; i < splitParts.length; i++) {
             const part = splitParts[i];
-            if (re.test(part)) {
-                const isOptional = part.substr(-1) === '?';
-                const hasPrefix = part.substr(0, 1) === '/';
-                const groupName = part.substr(hasPrefix ? 2 : 1, isOptional ? part.length - 2 : part.length);
+            const m = part.match(/^(\/?[^/:]*)?:([\w\d_]+)(\\\?)?$/);
+            if (m) {
+                const isOptional = !!m[3];
+                const prefix = m[1] || '';
+                const groupName = unEscapeRegExp(m[2]);
 
                 groupNames.push(groupName);
-                regexpStr += '(.*?)' + (isOptional ? '?' : '');
+                regexpStr += `(?:${prefix}([^/]+))` + (isOptional ? '?' : '');
                 pathParts.push({
                     paramName: groupName,
                     value: '',
-                    prefix: hasPrefix ? '/' : '',
+                    prefix: unEscapeRegExp(prefix),
                     isOptional,
                 });
-            } else {
+            } else if (part !== '') {
                 pathParts.push({
                     paramName: void 0,
-                    value: part,
+                    value: unEscapeRegExp(part),
                     prefix: '',
                     isOptional: false,
                 });
@@ -225,12 +232,12 @@ export class Path {
             const part = this.parts[i];
             if (part.paramName !== void 0) {
                 const paramValue = params[part.paramName];
-                if (paramValue === void 0) {
+                if ((typeof paramValue !== 'string' && typeof paramValue !== 'number') || paramValue === '') {
                     if (!part.isOptional) {
                         throw new Error(`Empty url param value for ${part.paramName}`);
                     }
                 } else {
-                    url += part.prefix + paramValue;
+                    url += part.prefix + encodeURIComponent(paramValue + '');
                 }
             } else {
                 url += part.value;
@@ -241,7 +248,11 @@ export class Path {
 }
 
 function escapeRegExp(text: string) {
-    return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+    return text.replace(/[\-\[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
+function unEscapeRegExp(text: string) {
+    return text.replace(/\\([\-\[\]{}()*+?.,\\^$|#\s])/g, '$1');
 }
 
 export class Route<T = {}> {
