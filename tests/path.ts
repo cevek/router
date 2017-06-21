@@ -81,7 +81,7 @@ test('empty', t => {
 test('toString non compiled path', t => {
     t.throws(() => {
         const path = new Path('/foo');
-        path.toString()
+        path.toString({});
     })
 });
 

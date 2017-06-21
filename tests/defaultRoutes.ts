@@ -1,48 +1,49 @@
-import {Route, RouteParams, Router} from '../dist/Router2';
+import {anyRoute, indexRoute, route, Router} from '../dist/Router2';
 import test from 'ava';
 
 function A() {}
 
 function createRouter() {
-    const route = new Route('/', A, {
-        index: new Route('', A, {}, {isIndex: true}),
-        notFound: new Route('', A, {}, {isNotFound: true}),
-        foo: new Route('/foo', A, {
-            index: new Route('', A, {}, {isIndex: true}),
-            notFound: new Route('', A, {}, {isNotFound: true}),
-            bar: new Route('bar', A, {
-                index: new Route('', A, {}, {isIndex: true}),
-                notFound: new Route('', A, {}, {isNotFound: true}),
-                baz: new Route('/baz/', A)
+    const index = route('/', A, {
+        index: indexRoute(A),
+        notFound: anyRoute(A),
+        foo: route('/foo', A, {
+            index: indexRoute(A),
+            notFound: anyRoute(A),
+            bar: route('bar', A, {
+                index: indexRoute(A),
+                notFound: anyRoute(A),
+                baz: route('/baz/', A)
             })
         }),
     });
-    const router = new Router(route);
-    return {router, route}
+    const router = new Router(index);
+    return {router, index}
 }
 
 
 test('index', async t => {
-    const {router, route} = createRouter();
+    const {router, index} = createRouter();
     let params;
     params = await router.changeUrl('/');
-    t.is(params.route, route.childrenMap.index);
+    t.is(params.route, index.index.route);
 
-    params = await router.changeUrl('/foo/');
-    t.is(params.route, route.childrenMap.foo.childrenMap.index);
+    params = await router.changeUrl('/foo/'); 
+    t.is(params.route, index.foo.index.route);
 
     params = await router.changeUrl('/foo/bar/');
-    t.is(params.route, route.childrenMap.foo.childrenMap.bar.childrenMap.index);});
+    t.is(params.route, index.foo.bar.index.route);
+});
 
 test('not found', async t => {
-    const {router, route} = createRouter();
+    const {router, index} = createRouter();
     let params;
     params = await router.changeUrl('/asdfasfas');
-    t.is(params.route, route.childrenMap.notFound);
+    t.is(params.route, index.notFound.route);
 
     params = await router.changeUrl('/foo/asdfadsf');
-    t.is(params.route, route.childrenMap.foo.childrenMap.notFound);
+    t.is(params.route, index.foo.notFound.route);
 
     params = await router.changeUrl('/foo/bar/asfdaf');
-    t.is(params.route, route.childrenMap.foo.childrenMap.bar.childrenMap.notFound);
+    t.is(params.route, index.foo.bar.notFound.route);
 });

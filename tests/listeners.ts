@@ -4,7 +4,7 @@ import test from 'ava';
 
 test('simple', t => {
     let calls:number[] = [];
-    const listeners = new Listerners();
+    const listeners = new Listerners<number>();
     const disposer = listeners.listen(val => calls.push(val));
     listeners.call(3);
     disposer();
@@ -14,7 +14,7 @@ test('simple', t => {
 
 test('several listeners', t => {
     let calls:number[] = [];
-    const listeners = new Listerners();
+    const listeners = new Listerners<number>();
     const disposer1 = listeners.listen(val => calls.push(val));
     const disposer2 = listeners.listen(val => calls.push(val + 10));
     const disposer3 = listeners.listen(val => calls.push(val + 100));

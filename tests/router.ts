@@ -1,8 +1,9 @@
-import {Route, RouteParams, Router} from '../dist/Router2';
+import {Route, route, RouteParams, Router} from '../dist/Router2';
 import test from 'ava';
 
 
-let calls:{type: string, name: string}[] = [];
+let calls: {type: string, name: string}[] = [];
+
 function clearCalls() {
     calls = [];
 }
@@ -29,7 +30,7 @@ class Foo {
     static onEnter(params: RouteParams) {
         calls.push({type: 'enter', name: 'Foo'});
         return sleep().then(() => {
-            return {fooo: 2, parent: params.parentProps}
+            return {fooo: 2, parent: params.parentProps};
         });
     }
 
@@ -99,92 +100,97 @@ class ProfileSettingsPwd {
     }
 }
 
-const route = new Route('/', A, {
-    foo: new Route('/f-:foo', Foo, {
-        bar: new Route(':bar', Bar, {
-            baz: new Route('/baz/', Baz)
+const index = route('/', A, {
+    foo: route('/f-:foo', Foo, {
+        bar: route(':bar', Bar, {
+            baz: route('/baz/', Baz)
         })
     }),
-    profile: new Route('/profile/:user_id', Profile, {
-        settings: new Route('/settings/', ProfileSettings, {
-            pages: new Route('/p-:page', ProfileSettingsPages),
-            pwd: new Route('/pwd', ProfileSettingsPwd)
+    profile: route('/profile/:user_id', Profile, {
+        settings: route('/settings/', ProfileSettings, {
+            pages: route('/p-:page', ProfileSettingsPages),
+            pwd: route('/pwd', ProfileSettingsPwd)
         })
     })
 });
 
+
+
 function appParams() {
     return [
         {
-            route: route,
+            route: index.route,
             props: {app: 1, parent: {}},
             usedUrlParams: [],
             usedSearchParams: [],
             isInit: true
         }
-    ]
+    ];
 }
 
 function fooParams() {
     return [
         ...appParams(),
         {
-            route: route.childrenMap.foo,
+            route: index.foo.route,
             props: {fooo: 2, parent: appParams().pop()!.props},
             usedUrlParams: [],
             usedSearchParams: [],
             isInit: true
         },
-    ]
+    ];
 }
+
 function fooBarParams() {
     return [
         ...fooParams(),
         {
-            route: route.childrenMap.foo.childrenMap.bar,
+            route: (index.foo.bar).route,
             props: {barr: 3, parent: fooParams().pop()!.props},
             usedUrlParams: [],
             usedSearchParams: [],
             isInit: true
         },
-    ]
+    ];
 }
 
 function profileParams() {
     return [
         ...appParams(),
         {
-            route: route.childrenMap.profile,
+            route: index.profile.route,
             props: {profile: 4, parent: appParams().pop()!.props},
             usedUrlParams: [],
             usedSearchParams: [],
             isInit: true
         },
-    ]
+    ];
 }
+
 function profileSettingsParams() {
     return [
         ...profileParams(),
         {
-            route: route.childrenMap.profile.childrenMap.settings,
+            route: index.profile.settings.route,
             props: {profileSettings: 4},
             usedUrlParams: [],
             usedSearchParams: [],
             isInit: true
         },
-    ]
+    ];
 }
+
 function profileSettingsPageParams() {
     return [
         ...profileSettingsParams(),
         {
-            route: route.childrenMap.profile.childrenMap.settings.childrenMap.pages,
+            route: index.profile.settings.pages.route,
             props: {},
             usedUrlParams: [],
             usedSearchParams: [],
             isInit: true
         },
-    ]
+    ];
 }
 
 // console.log(route.childrenMap.foo.childrenMap.bar);
@@ -194,10 +200,10 @@ test.beforeEach(() => {
 });
 
 test.serial('simple', async t => {
-    const router = new Router(route);
+    const router = new Router(index);
     const params = await router.changeUrl('/f-foo/BAR');
     t.deepEqual(params.urlParams, {foo: 'foo', bar: 'BAR'} as {});
-    t.deepEqual(params.bindings as any, fooBarParams());
+    t.deepEqual(params.bindings, fooBarParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'A'},
         {type: 'enter', name: 'Foo'},
@@ -206,19 +212,19 @@ test.serial('simple', async t => {
 });
 
 test.serial('transitions', async t => {
-    const router = new Router(route);
+    const router = new Router(index);
     let params;
     params = await router.changeUrl('/');
-    t.deepEqual(params.bindings as any, appParams());
+    t.deepEqual(params.bindings, appParams());
 
     clearCalls();
     params = await router.changeUrl('/f-foo/BAR');
     // console.log(params.bindings);
-    t.deepEqual(params.bindings as any, fooBarParams());
+    t.deepEqual(params.bindings, fooBarParams());
 
     clearCalls();
     params = await router.changeUrl('/profile/user/settings/');
-    t.deepEqual(params.bindings as any, profileSettingsParams());
+    t.deepEqual(params.bindings, profileSettingsParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'Profile'},
         {type: 'enter', name: 'ProfileSettings'},
@@ -229,7 +235,7 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/f-foo/BAR');
-    t.deepEqual(params.bindings as any, fooBarParams());
+    t.deepEqual(params.bindings, fooBarParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'Foo'},
         {type: 'enter', name: 'Bar'},
@@ -240,7 +246,7 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/');
-    t.deepEqual(params.bindings as any, appParams());
+    t.deepEqual(params.bindings, appParams());
     t.deepEqual(calls, [
         {type: 'leave', name: 'Bar'},
         {type: 'leave', name: 'Foo'},
@@ -249,7 +255,7 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/profile/user');
-    t.deepEqual(params.bindings as any, profileParams());
+    t.deepEqual(params.bindings, profileParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'Profile'},
     ]);
@@ -257,15 +263,14 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/profile/user/settings/');
-    t.deepEqual(params.bindings as any, profileSettingsParams());
+    t.deepEqual(params.bindings, profileSettingsParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'ProfileSettings'},
     ]);
 
     clearCalls();
     params = await router.changeUrl('/f-foo/');
-    t.is(params.route, route.childrenMap.foo)
-    t.deepEqual(params.bindings as any, fooParams());
+    t.deepEqual(params.bindings, fooParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'Foo'},
 
@@ -276,7 +281,7 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/f-foo/BAR');
-    t.deepEqual(params.bindings as any, fooBarParams());
+    t.deepEqual(params.bindings, fooBarParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'Bar'},
     ]);
@@ -284,7 +289,7 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/f-foo/');
-    t.deepEqual(params.bindings as any, fooParams());
+    t.deepEqual(params.bindings, fooParams());
     t.deepEqual(calls, [
         {type: 'leave', name: 'Bar'},
     ]);
@@ -292,29 +297,30 @@ test.serial('transitions', async t => {
 });
 
 test.serial('not found', async t => {
-    const router = new Router(route);
-    const params = await router.changeUrl('/not-found');
+    const router = new Router(index);
+    let params;
+    params = await router.changeUrl('/not-found');
     t.deepEqual(params.urlParams, {} as {});
-    t.deepEqual(params.bindings as any, []);
+    t.deepEqual(params.bindings, []);
 
     params = await router.changeUrl('/f-foo/');
 
-    const params = await router.changeUrl('/not-found');
-    t.deepEqual(params.bindings as any, fooParams());
+    params = await router.changeUrl('/not-found');
+    t.deepEqual(params.bindings, fooParams());
 });
 
 test.serial('check no onEnter no onLeave', async t => {
-    const router = new Router(route);
+    const router = new Router(index);
     const params = await router.changeUrl('/profile/user/settings/p-1');
-    t.deepEqual(params.bindings as any, profileSettingsPageParams());
+    t.deepEqual(params.bindings, profileSettingsPageParams());
     await router.changeUrl('/');
 });
 
 test.serial('break transition', async t => {
-    const router = new Router(route);
+    const router = new Router(index);
     router.changeUrl('/profile/user/settings/p-1');
     const params = await router.changeUrl('/f-foo/BAR/');
-    t.deepEqual(params.bindings as any, fooBarParams());
+    t.deepEqual(params.bindings, fooBarParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'A'},
         {type: 'enter', name: 'Foo'},
@@ -324,9 +330,9 @@ test.serial('break transition', async t => {
 
 
 test.serial('redirect in onEnter', async t => {
-    const router = new Router(route);
+    const router = new Router(index);
     const params = await router.changeUrl('/f-foo/BAR/baz');
-    t.deepEqual(params.bindings as any, fooParams());
+    t.deepEqual(params.bindings, fooParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'A'},
         {type: 'enter', name: 'Foo'},
@@ -336,6 +342,13 @@ test.serial('redirect in onEnter', async t => {
         {type: 'enter', name: 'Foo'},
     ]);
 });
+
+test.serial('toUrl', async t => {
+    const router = new Router(index);
+    const params = await router.changeUrl(index.foo.bar.toUrl({foo: 'foo', bar: 'BAR'}));
+    t.deepEqual(params.bindings, fooBarParams());
+});
+
 
 // test.serial.only('redirect in onLeave', async t => {
 //     const router = new Router(route);

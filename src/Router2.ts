@@ -10,7 +10,7 @@ class P<T = {}> {
 export class Listerners<T> {
     protected listeners: ((value: T) => void)[] = [];
 
-    listen(callback: () => void) {
+    listen(callback: (value: T) => void) {
         if (this.listeners.indexOf(callback) === -1) {
             this.listeners.push(callback);
         }
@@ -39,30 +39,37 @@ export interface RouteBinding {
 
 export interface Transition {
     id: number;
+    route: Route;
     url: string;
     urlParams: {},
     searchParams: {},
     bindings: RouteBinding[];
-    route: Route;
 }
 
 
 export class Router {
     protected routes: Route[];
-    protected transition: Transition = {id: ++this.transitionIdx, url: '', route: (void 0)!, bindings: [], urlParams: {}, searchParams: {}};
     protected transitionIdx = 0;
+    protected transition: Transition = {
+        route: (void 0)!,
+        id: ++this.transitionIdx,
+        url: '',
+        bindings: [],
+        urlParams: {},
+        searchParams: {}
+    };
     indexRoute: Route;
     beforeUpdate = new Listerners();
     afterUpdate = new Listerners();
 
-    constructor(indexRoute: Route) {
+    constructor(indexRoute: SimpleRoute) {
         this.setIndexRoute(indexRoute);
     }
 
-    setIndexRoute(indexRoute: Route) {
-        this.indexRoute = indexRoute;
-        this.routes = indexRoute.flatChildren();
-        indexRoute.compile();
+    setIndexRoute(indexRoute: SimpleRoute) {
+        this.indexRoute = indexRoute.route;
+        this.routes = this.indexRoute.flatChildren();
+        this.indexRoute.compile();
         for (let i = 0; i < this.routes.length; i++) {
             const route = this.routes[i];
             route.compile();
@@ -86,8 +93,8 @@ export class Router {
         const promise = new P<Transition>();
         const transition: Transition = {
             id: ++this.transitionIdx,
-            url,
             route,
+            url,
             bindings: newRouteStack,
             urlParams,
             searchParams,
@@ -121,10 +128,10 @@ export class Router {
     }
 
     protected createOnEnterParams(parentProps: {}, transition: Transition, currentRoute: Route): RouteParams {
+        const isDestination = transition.bindings[transition.bindings.length - 1].route === currentRoute;
         return {
             router: this,
-            currentRoute,
-            destRoute: transition.route,
+            isDestination,
             url: transition.url,
             urlParams: transition.urlParams,
             searchParams: transition.searchParams,
@@ -153,7 +160,7 @@ export class Router {
     }
 
     protected leaveStack(transition: Transition, leaveRouteStack: RouteBinding[]) {
-        let promise = Promise.resolve();
+        let promise: Promise<void | false | Transition> = Promise.resolve();
         for (let i = leaveRouteStack.length - 1; i >= 0; i--) {
             const routeBinding = leaveRouteStack[i];
             promise = promise.then(() => {
@@ -208,8 +215,7 @@ export interface RouteParams<UrlParams = {}, SearchParams = {}> {
     urlParams: UrlParams;
     searchParams: SearchParams;
     parentProps: {};
-    currentRoute: Route;
-    destRoute: Route;
+    isDestination: boolean;
 }
 
 export interface PathPart {
@@ -323,40 +329,74 @@ function unEscapeRegExp(text: string) {
 }
 
 
-export interface ComponentClass<T = {}> {
-    onEnter?: (params: RouteParams) => Promise<T>;
-    onLeave?: (params: RouteParams) => Promise<void>;
+export interface ComponentClass<Props = {}> {
+    [key: string]: any;
+
+    onEnter?: (params: RouteParams) => Promise<Props | Transition>;
+    onLeave?: (params: RouteParams) => Promise<void | false | Transition>;
 }
 
-export class Route<T = {}, Children extends {[name: string]: Route} = {[name: string]: Route}> {
+export interface SimpleRoute {
+    //@internal
+    route: Route;
+}
+
+export function route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, ChildrenMap extends {[name: string]: SimpleRoute} = {}, Props = {}>(pathString: string, component: ComponentClass<Props>, childrenMap = {} as ChildrenMap): ChildrenMap & SimpleRoute & {toUrl(params: UrlParams): string} {
+    let children: Route[] = [];
+    const keys = Object.keys(childrenMap);
+    for (let i = 0; i < keys.length; i++) {
+        const key = keys[i];
+        children.push(childrenMap[key].route);
+    }
+    const r = new Route<UrlParams, SearchParams, Props>(pathString, component, children);
+    return Object.assign(childrenMap, {
+        toUrl(params: UrlParams) {return this.route.toUrl(params);},
+        route: r
+    });
+}
+
+export function indexRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<Props>): SimpleRoute {
+    const r = new Route<UrlParams, SearchParams, Props>('', component, [], {isIndex: true});
+    return {
+        route: r
+    };
+}
+
+export function anyRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<Props>): SimpleRoute {
+    const r = new Route<UrlParams, SearchParams, Props>('', component, [], {isNotFound: true});
+    return {
+        route: r
+    };
+}
+
+
+export interface UrlSearchParams {
+    [name: string]: string;
+}
+
+export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}> {
     parent: Route | undefined = void 0;
-    component: ComponentClass<T>;
+    component: ComponentClass<Props>;
     children: Route[] = [];
-    childrenMap: Children;
     path: Path;
 
-    onEnter: (params: RouteParams) => Promise<T>;
-    onLeave: (params: RouteParams) => Promise<void>;
+    onEnter: (params: RouteParams<UrlParams, SearchParams>) => Promise<Props | Transition>;
+    onLeave: (params: RouteParams<UrlParams, SearchParams>) => Promise<void | false | Transition>;
 
     isIndex: boolean;
-    isNotFound: boolean;
+    isAny: boolean;
 
-    constructor(pathString: string, component: ComponentClass<T>, children?: Children, options: {isNotFound?: boolean, isIndex?: boolean} = {}) {
+    constructor(pathString: string, component: ComponentClass<Props>, children: Route[] = [], options: {isNotFound?: boolean, isIndex?: boolean} = {}) {
         this.isIndex = Boolean(options.isIndex);
-        this.isNotFound = Boolean(options.isNotFound);
+        this.isAny = Boolean(options.isNotFound);
 
-        this.path = new Path(pathString, !this.isNotFound);
+        this.path = new Path(pathString, !this.isAny);
         this.component = component;
-        if (children !== void 0) {
-            this.childrenMap = children;
-            const keys = Object.keys(children);
-            for (let i = 0; i < keys.length; i++) {
-                const key = keys[i];
-                const childRoute = children[key];
-                this.addChild(childRoute);
-            }
+        for (let i = 0; i < children.length; i++) {
+            const childRoute = children[i];
+            this.addChild(childRoute);
         }
-        this.onEnter = component.onEnter || (() => Promise.resolve({} as T));
+        this.onEnter = component.onEnter || (() => Promise.resolve({} as Props));
         this.onLeave = component.onLeave || (() => Promise.resolve());
     }
 
@@ -394,7 +434,7 @@ export class Route<T = {}, Children extends {[name: string]: Route} = {[name: st
         this.path.pattern = ('/' + this.path.pattern).replace(/\/+/g, '/').replace(/\/+$/, '');
     }
 
-    toUrl(params: {[name: string]: string}) {
+    toUrl(params: {[name: string]: string | number}) {
         return this.path.toString(params);
     }
 
