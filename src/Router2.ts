@@ -45,9 +45,11 @@ export interface Transition {
     bindings: RouteBinding[];
 }
 
+let transtionIdx = 0;
+
 export class Router {
     protected routes: Route[];
-    protected transition: Transition = {id: 1, url: '', bindings: [], urlParams: {}, searchParams: {}};
+    protected transition: Transition = {id: ++transtionIdx, url: '', bindings: [], urlParams: {}, searchParams: {}};
     indexRoute: Route;
     beforeUpdate = new Listerners();
     afterUpdate = new Listerners();
@@ -72,7 +74,7 @@ export class Router {
         const {removeRouteStack, newRouteStack} = this.makeNewRouteStack(route);
         const promise = new P<Transition>();
         const transition: Transition = {
-            id: this.transition.id + 1,
+            id: ++transtionIdx,
             url,
             bindings: newRouteStack,
             urlParams,
@@ -81,12 +83,15 @@ export class Router {
         this.beforeUpdate.call(transition);
         const startPromise = Promise.resolve({});
         this.resolveStack(startPromise, transition).then(() => {
+            if (!this.isActualTransition(transition)) return;
             return this.leaveStack(transition, removeRouteStack);
         }).then(() => {
             if (this.isActualTransition(transition)) {
                 this.transition = transition;
                 promise.resolve(transition);
                 this.afterUpdate.call(transition);
+            } else {
+                promise.resolve(this.transition);
             }
         }).catch(promise.reject);
         return promise.promise;
@@ -147,7 +152,7 @@ export class Router {
     }
 
     protected isActualTransition(transition: Transition) {
-        return transition.id === this.transition.id + 1;
+        return transition.id === transtionIdx;
     }
 
     protected makeNewRouteStack(nextRoute: Route): {removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[]} {
@@ -212,6 +217,9 @@ export class Path {
     }
 
     parse(path: string) {
+        if (!this.isCompiled) {
+            throw new Error('Path not compiled yet');
+        }
         const m = path.match(this.regexp);
         if (m === null) return void 0;
         const params: {[name: string]: string} = {};
@@ -262,6 +270,9 @@ export class Path {
     }
 
     toString(params: {[name: string]: string | number}) {
+        if (!this.isCompiled) {
+            throw new Error('Path not compiled yet');
+        }
         let url = '';
         for (let i = 0; i < this.parts.length; i++) {
             const part = this.parts[i];
@@ -342,12 +353,25 @@ export class Route<T = {}, Children extends {[name: string]: Route} = {[name: st
     }
 
     compile() {
+        this.normalizePathString();
         this.path.compile();
         for (let i = 0; i < this.children.length; i++) {
             const child = this.children[i];
-            child.path.pattern = (this.path.pattern + '/' + child.path.originalPattern).replace(/\/+/g, '/');
+            child.path.pattern = this.path.pattern + '/' + child.path.originalPattern;
             child.compile();
         }
+        return this;
+    }
+
+    normalizePathString() {
+        this.path.pattern = ('/' + this.path.pattern).replace(/\/+/g, '/').replace(/\/+$/, '');;
+        if (this.path.pattern === '') {
+            this.path.pattern = '/'
+        }
+    }
+
+    toUrl(params: {[name: string]: string}) {
+        return this.path.toString(params);
     }
 
     flatChildren() {

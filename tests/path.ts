@@ -36,6 +36,13 @@ test('optional non exist', t => {
     t.is(path.toString({}), '/a/c');
 });
 
+test('empty prefix', t => {
+    const path = new Path(':foo').compile();
+    const res = path.parse('abc');
+    t.deepEqual(res, {foo: 'abc'});
+    t.is(path.toString({foo: 'abc'}), 'abc');
+});
+
 test('custom prefix', t => {
     const path = new Path('/a/he$ll.o-:b/c').compile();
     const res = path.parse('/a/he$ll.o-boom/c');
@@ -69,6 +76,20 @@ test('empty', t => {
     const res = path.parse('');
     t.deepEqual(res, {b: ''});
     t.is(path.toString({}), '');
+});
+
+test('toString non compiled path', t => {
+    t.throws(() => {
+        const path = new Path('/foo');
+        path.toString()
+    })
+});
+
+test('parse non compiled path', t => {
+    t.throws(() => {
+        const path = new Path('/foo');
+        path.parse('/foo')
+    })
 });
 
 test('symbols test', t => {

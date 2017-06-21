@@ -52,6 +52,19 @@ class Bar {
 }
 
 
+class Baz {
+    static onEnter(params: RouteParams) {
+        calls.push({type: 'enter', name: 'Baz'});
+        return params.router.changeUrl('/f-foo/');
+    }
+
+    static onLeave() {
+        calls.push({type: 'leave', name: 'Baz'});
+        return Promise.resolve();
+    }
+}
+
+
 class Profile {
     static onEnter(params: RouteParams) {
         calls.push({type: 'enter', name: 'Profile'});
@@ -79,13 +92,23 @@ class ProfileSettings {
 class ProfileSettingsPages {
 }
 
+class ProfileSettingsPwd {
+    static onLeave(params: RouteParams) {
+        calls.push({type: 'leave', name: 'ProfileSettingsPwd'});
+        return params.router.changeUrl('/f-foo/BAR');
+    }
+}
+
 const route = new Route('/', A, {
     foo: new Route('/f-:foo', Foo, {
-        bar: new Route(':bar?', Bar)
+        bar: new Route(':bar?', Bar, {
+            baz: new Route('/baz/', Baz)
+        })
     }),
     profile: new Route('/profile/:user_id', Profile, {
         settings: new Route('/settings/', ProfileSettings, {
-            pages: new Route('/p-:page', ProfileSettingsPages)
+            pages: new Route('/p-:page', ProfileSettingsPages),
+            pwd: new Route('/pwd', ProfileSettingsPwd)
         })
     })
 });
@@ -286,17 +309,45 @@ test.serial('check no onEnter no onLeave', async t => {
     await router.changeUrl('/');
 });
 
-test.serial.skip('break transition', async t => {
+test.serial('break transition', async t => {
     const router = new Router(route);
     router.changeUrl('/profile/user/settings/p-1');
     const params = await router.changeUrl('/f-foo/BAR/');
     t.deepEqual(params.bindings as any, fooBarParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'A'},
-        {type: 'enter', name: 'A'},
-        {type: 'enter', name: 'Profile'},
         {type: 'enter', name: 'Foo'},
-        {type: 'enter', name: 'ProfileSettings'},
         {type: 'enter', name: 'Bar'},
     ]);
 });
+
+
+test.serial('redirect in onEnter', async t => {
+    const router = new Router(route);
+    const params = await router.changeUrl('/f-foo/BAR/baz');
+    t.deepEqual(params.bindings as any, fooParams());
+    t.deepEqual(calls, [
+        {type: 'enter', name: 'A'},
+        {type: 'enter', name: 'Foo'},
+        {type: 'enter', name: 'Bar'},
+        {type: 'enter', name: 'Baz'},
+        {type: 'enter', name: 'A'},
+        {type: 'enter', name: 'Foo'},
+    ]);
+});
+
+// test.serial.only('redirect in onLeave', async t => {
+//     const router = new Router(route);
+//     await router.changeUrl('/profile/user/settings/pwd');
+//     clearCalls();
+//     await router.changeUrl('/');
+//     t.deepEqual(calls, [
+//         {type: 'leave', name: 'ProfileSettingsPwd'},
+//
+//         {type: 'enter', name: 'Foo'},
+//         {type: 'enter', name: 'Bar'},
+//         {type: 'enter', name: 'Baz'},
+//         {type: 'enter', name: 'A'},
+//         {type: 'enter', name: 'Foo'},
+//     ]);
+// });
