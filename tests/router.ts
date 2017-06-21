@@ -101,7 +101,7 @@ class ProfileSettingsPwd {
 
 const route = new Route('/', A, {
     foo: new Route('/f-:foo', Foo, {
-        bar: new Route(':bar?', Bar, {
+        bar: new Route(':bar', Bar, {
             baz: new Route('/baz/', Baz)
         })
     }),
@@ -264,6 +264,7 @@ test.serial('transitions', async t => {
 
     clearCalls();
     params = await router.changeUrl('/f-foo/');
+    t.is(params.route, route.childrenMap.foo)
     t.deepEqual(params.bindings as any, fooParams());
     t.deepEqual(calls, [
         {type: 'enter', name: 'Foo'},

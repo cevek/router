@@ -109,3 +109,15 @@ test('value symbols test', t => {
     const res2 = path.parse(str);
     t.deepEqual(res2, {aa: '!-{}?()[]*&1345#"\'\\+=^$@;'});
 });
+
+test('exact test', t => {
+    const path = new Path('/foo').compile();
+    const res = path.parse('/foo/bar');
+    t.deepEqual(res, void 0);
+});
+
+test('non exact test', t => {
+    const path = new Path('/foo', false).compile();
+    const res = path.parse('/foo/bar');
+    t.deepEqual(res, {});
+});

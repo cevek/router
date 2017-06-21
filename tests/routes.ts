@@ -18,7 +18,7 @@ test('slashes', t => {
     t.is(route.path.pattern, '/hello/:foo/:bar?')
 
     const route = new Route('', A, {}).compile();
-    t.is(route.path.pattern, '/')
+    t.is(route.path.pattern, '')
 
     const route = new Route('/foo/', A, {}).compile();
     t.is(route.path.pattern, '/foo')
@@ -30,7 +30,7 @@ test('to str', t => {
     t.is(route.path.pattern, '/hello/:foo/:bar?')
 
     const route = new Route('', A, {}).compile();
-    t.is(route.path.pattern, '/')
+    t.is(route.path.pattern, '')
 
     const route = new Route('/foo/', A, {}).compile();
     t.is(route.path.pattern, '/foo')

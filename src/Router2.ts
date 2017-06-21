@@ -43,18 +43,23 @@ export interface Transition {
     urlParams: {},
     searchParams: {},
     bindings: RouteBinding[];
+    route: Route;
 }
 
-let transtionIdx = 0;
 
 export class Router {
     protected routes: Route[];
-    protected transition: Transition = {id: ++transtionIdx, url: '', bindings: [], urlParams: {}, searchParams: {}};
+    protected transition: Transition = {id: ++this.transitionIdx, url: '', route: (void 0)!, bindings: [], urlParams: {}, searchParams: {}};
+    protected transitionIdx = 0;
     indexRoute: Route;
     beforeUpdate = new Listerners();
     afterUpdate = new Listerners();
 
     constructor(indexRoute: Route) {
+        this.setIndexRoute(indexRoute);
+    }
+
+    setIndexRoute(indexRoute: Route) {
         this.indexRoute = indexRoute;
         this.routes = indexRoute.flatChildren();
         indexRoute.compile();
@@ -62,6 +67,12 @@ export class Router {
             const route = this.routes[i];
             route.compile();
         }
+        this.routes.sort((a, b) => {
+            /* istanbul ignore if */
+            if (a.path.pattern > b.path.pattern) return -1;
+            if (a.path.pattern < b.path.pattern) return 1;
+            return a.isIndex ? -1 : 1;
+        });
     }
 
     changeUrl(url: string): Promise<Transition> {
@@ -74,8 +85,9 @@ export class Router {
         const {removeRouteStack, newRouteStack} = this.makeNewRouteStack(route);
         const promise = new P<Transition>();
         const transition: Transition = {
-            id: ++transtionIdx,
+            id: ++this.transitionIdx,
             url,
+            route,
             bindings: newRouteStack,
             urlParams,
             searchParams,
@@ -108,9 +120,11 @@ export class Router {
         return void 0;
     }
 
-    protected createOnEnterParams(parentProps: {}, transition: Transition): RouteParams {
+    protected createOnEnterParams(parentProps: {}, transition: Transition, currentRoute: Route): RouteParams {
         return {
             router: this,
+            currentRoute,
+            destRoute: transition.route,
             url: transition.url,
             urlParams: transition.urlParams,
             searchParams: transition.searchParams,
@@ -126,7 +140,7 @@ export class Router {
             } else {
                 promise = promise.then(parentProps => {
                     if (!this.isActualTransition(transition)) return {};
-                    return routeBinding.route.onEnter(this.createOnEnterParams(parentProps, transition)).then(props => {
+                    return routeBinding.route.onEnter(this.createOnEnterParams(parentProps, transition, routeBinding.route)).then(props => {
                         if (!this.isActualTransition(transition)) return;
                         routeBinding.isInit = true;
                         routeBinding.props = props;
@@ -143,8 +157,8 @@ export class Router {
         for (let i = leaveRouteStack.length - 1; i >= 0; i--) {
             const routeBinding = leaveRouteStack[i];
             promise = promise.then(() => {
-                if (!this.isActualTransition(transition)) return;
-                return routeBinding.route.onLeave(this.createOnEnterParams({}, transition));
+                // if (!this.isActualTransition(transition)) return;
+                return routeBinding.route.onLeave(this.createOnEnterParams({}, transition, routeBinding.route));
             });
         }
 
@@ -152,7 +166,7 @@ export class Router {
     }
 
     protected isActualTransition(transition: Transition) {
-        return transition.id === transtionIdx;
+        return transition.id === this.transitionIdx;
     }
 
     protected makeNewRouteStack(nextRoute: Route): {removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[]} {
@@ -194,6 +208,8 @@ export interface RouteParams<UrlParams = {}, SearchParams = {}> {
     urlParams: UrlParams;
     searchParams: SearchParams;
     parentProps: {};
+    currentRoute: Route;
+    destRoute: Route;
 }
 
 export interface PathPart {
@@ -207,12 +223,14 @@ export class Path {
     protected regexp: RegExp;
     protected parts: PathPart[];
     protected regexpGroupNames: string[];
+    protected isExact: boolean;
     originalPattern: string;
     pattern: string;
     isCompiled = false;
 
-    constructor(pattern: string) {
+    constructor(pattern: string, isExact = true) {
         this.pattern = pattern;
+        this.isExact = isExact;
         this.originalPattern = pattern;
     }
 
@@ -261,7 +279,10 @@ export class Path {
                 regexpStr += part;
             }
         }
-        regexpStr += '/?$';
+        regexpStr += '/?';
+        if (this.isExact) {
+            regexpStr += '$';
+        }
         this.parts = pathParts;
         this.regexp = new RegExp(regexpStr);
         this.regexpGroupNames = groupNames;
@@ -317,8 +338,14 @@ export class Route<T = {}, Children extends {[name: string]: Route} = {[name: st
     onEnter: (params: RouteParams) => Promise<T>;
     onLeave: (params: RouteParams) => Promise<void>;
 
-    constructor(pathString: string, component: ComponentClass<T>, children?: Children) {
-        this.path = new Path(pathString);
+    isIndex: boolean;
+    isNotFound: boolean;
+
+    constructor(pathString: string, component: ComponentClass<T>, children?: Children, options: {isNotFound?: boolean, isIndex?: boolean} = {}) {
+        this.isIndex = Boolean(options.isIndex);
+        this.isNotFound = Boolean(options.isNotFound);
+
+        this.path = new Path(pathString, !this.isNotFound);
         this.component = component;
         if (children !== void 0) {
             this.childrenMap = children;
@@ -364,10 +391,7 @@ export class Route<T = {}, Children extends {[name: string]: Route} = {[name: st
     }
 
     normalizePathString() {
-        this.path.pattern = ('/' + this.path.pattern).replace(/\/+/g, '/').replace(/\/+$/, '');;
-        if (this.path.pattern === '') {
-            this.path.pattern = '/'
-        }
+        this.path.pattern = ('/' + this.path.pattern).replace(/\/+/g, '/').replace(/\/+$/, '');
     }
 
     toUrl(params: {[name: string]: string}) {
