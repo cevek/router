@@ -1,10 +1,10 @@
-import {Listerners} from '../dist/Router2';
+import {Listeners} from '../dist/Router';
 
 import test from 'ava';
 
 test('simple', t => {
     let calls:number[] = [];
-    const listeners = new Listerners<number>();
+    const listeners = new Listeners<number>();
     const disposer = listeners.listen(val => calls.push(val));
     listeners.call(3);
     disposer();
@@ -14,7 +14,7 @@ test('simple', t => {
 
 test('several listeners', t => {
     let calls:number[] = [];
-    const listeners = new Listerners<number>();
+    const listeners = new Listeners<number>();
     const disposer1 = listeners.listen(val => calls.push(val));
     const disposer2 = listeners.listen(val => calls.push(val + 10));
     const disposer3 = listeners.listen(val => calls.push(val + 100));
@@ -30,7 +30,7 @@ test('several listeners', t => {
 
 test('non unique listeners', t => {
     let calls:number[] = [];
-    const listeners = new Listerners();
+    const listeners = new Listeners();
     function callback(val: number) {
         calls.push(val);
     }

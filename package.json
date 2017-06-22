@@ -2,24 +2,29 @@
   "name": "router",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
+  "main": "dist/Router.js",
+  "typings": "dist/Router.d.ts",
   "scripts": {
     "test": "ava tests/index.js",
-    "test-coverage": "nyc --reporter=lcov npm test"
+    "test-coverage": "nyc --reporter=lcov npm test",
+    "build": "tsc"
   },
+  "files": [
+    "dist/Router.js",
+    "dist/Router.d.ts"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/prop-types": "^15.5.1",
-    "@types/react": "^15.0.24",
     "@types/react-dom": "^15.5.0",
     "nyc": "^11.0.2",
     "prop-types": "^15.5.8",
     "react-prop-types": "^0.4.0"
   },
   "devDependencies": {
+    "@types/prop-types": "^15.5.1",
+    "@types/react": "^15.0.30",
     "ava": "^0.19.1",
     "ts-node": "^3.0.6",
     "typescript": "^2.3.4"

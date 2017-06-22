@@ -1,3 +1,6 @@
+import * as React from 'react';
+import * as PropTypes from 'prop-types';
+
 class P<T = {}> {
     resolve: (value?: T) => void;
     reject: (err: any) => void;
@@ -7,7 +10,7 @@ class P<T = {}> {
     });
 }
 
-export class Listerners<T> {
+export class Listeners<T> {
     protected listeners: ((value: T) => void)[] = [];
 
     listen(callback: (value: T) => void) {
@@ -40,6 +43,7 @@ export interface RouteBinding {
 export interface Transition {
     id: number;
     route: Route;
+    replaceUrl: boolean;
     url: string;
     urlParams: {},
     searchParams: {},
@@ -53,17 +57,27 @@ export class Router {
     protected transition: Transition = {
         route: (void 0)!,
         id: ++this.transitionIdx,
+        replaceUrl: false,
         url: '',
         bindings: [],
         urlParams: {},
         searchParams: {}
     };
     indexRoute: Route;
-    beforeUpdate = new Listerners();
-    afterUpdate = new Listerners();
+    beforeUpdate = new Listeners();
+    afterUpdate = new Listeners();
+    urlHistory: UrlHistory;
 
-    constructor(indexRoute: SimpleRoute) {
+    constructor(indexRoute: SimpleRoute, urlHistory: UrlHistory) {
+        this.urlHistory = urlHistory;
+        this.urlHistory.urlChanged.listen(url => {
+            this.changeUrl(url, true);
+        });
         this.setIndexRoute(indexRoute);
+    }
+
+    init() {
+        return this.changeUrl(this.urlHistory.getCurrentUrl(), true);
     }
 
     setIndexRoute(indexRoute: SimpleRoute) {
@@ -82,18 +96,25 @@ export class Router {
         });
     }
 
-    changeUrl(url: string): Promise<Transition> {
+    getLastTransition() {
+        return this.transition;
+    }
+
+
+    changeUrl(url: string, replaceUrl = false): Promise<Transition> {
         const r = this.findRoute(url);
         if (r === void 0) {
+            this.setUrl(this.transition.url, true);
             return Promise.resolve(this.transition);
         }
-        const {route, urlParams} = r;
+        const { route, urlParams } = r;
         const searchParams = {}; //todo:
-        const {removeRouteStack, newRouteStack} = this.makeNewRouteStack(route);
+        const { removeRouteStack, newRouteStack } = this.makeNewRouteStack(route);
         const promise = new P<Transition>();
         const transition: Transition = {
             id: ++this.transitionIdx,
             route,
+            replaceUrl,
             url,
             bindings: newRouteStack,
             urlParams,
@@ -106,22 +127,36 @@ export class Router {
             return this.leaveStack(transition, removeRouteStack);
         }).then(() => {
             if (this.isActualTransition(transition)) {
+                this.setUrl(transition.url, false);
                 this.transition = transition;
                 promise.resolve(transition);
                 this.afterUpdate.call(transition);
             } else {
                 promise.resolve(this.transition);
             }
-        }).catch(promise.reject);
+        }).catch(err => {
+            this.setUrl(this.transition.url, true);
+            return Promise.reject(promise.reject);
+        });
         return promise.promise;
     }
 
-    protected findRoute(url: string): {route: Route, urlParams: {}} | undefined {
+    protected setUrl(url: string, replace: boolean) {
+        if (this.urlHistory.getCurrentUrl() !== url) {
+            if (replace) {
+                this.urlHistory.replace(url);
+            } else {
+                this.urlHistory.push(url);
+            }
+        }
+    }
+
+    protected findRoute(url: string): { route: Route, urlParams: {} } | undefined {
         for (let i = 0; i < this.routes.length; i++) {
             const route = this.routes[i];
             const urlParams = route.match(url);
             if (urlParams !== void 0) {
-                return {route, urlParams};
+                return { route, urlParams };
             }
         }
         return void 0;
@@ -176,7 +211,7 @@ export class Router {
         return transition.id === this.transitionIdx;
     }
 
-    protected makeNewRouteStack(nextRoute: Route): {removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[]} {
+    protected makeNewRouteStack(nextRoute: Route): { removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[] } {
         const remove: RouteBinding[] = [];
         const newRouteStack: RouteBinding[] = [];
         const nextParents = nextRoute.getParents();
@@ -205,7 +240,7 @@ export class Router {
                 isInit: false,
             });
         }
-        return {removeRouteStack: remove, newRouteStack};
+        return { removeRouteStack: remove, newRouteStack };
     }
 }
 
@@ -246,7 +281,7 @@ export class Path {
         }
         const m = path.match(this.regexp);
         if (m === null) return void 0;
-        const params: {[name: string]: string} = {};
+        const params: { [name: string]: string } = {};
         for (let i = 1; i < m.length; i++) {
             params[this.regexpGroupNames[i]] = decodeURIComponent(m[i] || '');
         }
@@ -296,7 +331,7 @@ export class Path {
         return this;
     }
 
-    toString(params: {[name: string]: string | number}) {
+    toString(params: { [name: string]: string | number }) {
         if (!this.isCompiled) {
             throw new Error('Path not compiled yet');
         }
@@ -339,9 +374,10 @@ export interface ComponentClass<Props = {}> {
 export interface SimpleRoute {
     //@internal
     route: Route;
+    // bind: (params: {}) => {};
 }
 
-export function route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, ChildrenMap extends {[name: string]: SimpleRoute} = {}, Props = {}>(pathString: string, component: ComponentClass<Props>, childrenMap = {} as ChildrenMap): ChildrenMap & SimpleRoute & {toUrl(params: UrlParams): string} {
+export function route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, ChildrenMap extends { [name: string]: SimpleRoute } = {}, Props = {}>(pathString: string, component: ComponentClass<Props>, childrenMap = {} as ChildrenMap): ChildrenMap & SimpleRoute & { toUrl(params: UrlParams): string } {
     let children: Route[] = [];
     const keys = Object.keys(childrenMap);
     for (let i = 0; i < keys.length; i++) {
@@ -350,20 +386,20 @@ export function route<UrlParams extends UrlSearchParams = {}, SearchParams exten
     }
     const r = new Route<UrlParams, SearchParams, Props>(pathString, component, children);
     return Object.assign(childrenMap, {
-        toUrl(params: UrlParams) {return this.route.toUrl(params);},
+        toUrl(params: UrlParams) { return this.route.toUrl(params); },
         route: r
     });
 }
 
 export function indexRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<Props>): SimpleRoute {
-    const r = new Route<UrlParams, SearchParams, Props>('', component, [], {isIndex: true});
+    const r = new Route<UrlParams, SearchParams, Props>('', component, [], { isIndex: true });
     return {
         route: r
     };
 }
 
 export function anyRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<Props>): SimpleRoute {
-    const r = new Route<UrlParams, SearchParams, Props>('', component, [], {isNotFound: true});
+    const r = new Route<UrlParams, SearchParams, Props>('', component, [], { isNotFound: true });
     return {
         route: r
     };
@@ -386,7 +422,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
     isIndex: boolean;
     isAny: boolean;
 
-    constructor(pathString: string, component: ComponentClass<Props>, children: Route[] = [], options: {isNotFound?: boolean, isIndex?: boolean} = {}) {
+    constructor(pathString: string, component: ComponentClass<Props>, children: Route[] = [], options: { isNotFound?: boolean, isIndex?: boolean } = {}) {
         this.isIndex = Boolean(options.isIndex);
         this.isAny = Boolean(options.isNotFound);
 
@@ -434,7 +470,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
         this.path.pattern = ('/' + this.path.pattern).replace(/\/+/g, '/').replace(/\/+$/, '');
     }
 
-    toUrl(params: {[name: string]: string | number}) {
+    toUrl(params: { [name: string]: string | number }) {
         return this.path.toString(params);
     }
 
@@ -445,5 +481,196 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
             children.push(...childRoute.flatChildren());
         }
         return children;
+    }
+}
+
+
+export abstract class UrlHistory {
+    abstract history: History;
+    urlChanged = new Listeners<string>();
+
+    abstract getCurrentUrl(): string;
+
+    constructor() {
+        this.listen();
+    }
+
+    abstract listen(): void;
+
+    protected onPopState = () => {
+        this.urlChanged.call(this.getCurrentUrl());
+    };
+
+    get length() {
+        return this.history.length;
+    }
+
+    canBack() {
+        //todo: add referrer, check firefox, ie, open from other domain link
+        // || document.referrer.length > 0
+        return this.length > 2;
+    }
+
+    push(url: string) {
+        this.history.pushState(undefined, '', url);
+    }
+
+    replace(url: string) {
+        this.history.replaceState(undefined, '', url);
+    }
+
+    replaceState(state: {}) {
+        this.history.replaceState(state, '');
+    }
+
+    back() {
+        this.history.back();
+    }
+
+    forward() {
+        this.history.forward();
+    }
+}
+
+
+export class BrowserHistory extends UrlHistory {
+    history = window.history;
+
+    getCurrentUrl() {
+        return window.location.pathname + window.location.search;
+        //todo: state?
+        // return new Url({url: window.location.pathname + window.location.search, state: this.history.state});
+    }
+
+    listen() {
+        window.addEventListener('popstate', this.onPopState);
+    }
+}
+
+export class BrowserHashHistory extends BrowserHistory {
+    getCurrentUrl() {
+        return window.location.hash.substr(1);
+        //todo: state?
+        // return new Url({url: window.location.hash.substr(1), state: this.history.state});
+    }
+
+    push(url: string) {
+        this.history.pushState(undefined, '', '#' + url);
+    }
+
+    replace(url: string) {
+        this.history.replaceState(undefined, '', '#' + url);
+    }
+}
+
+export class NodeHistory extends UrlHistory {
+    history = {
+        length: 0,
+        state: null as any,
+        back() { },
+        forward() { },
+        go() { },
+        pushState() { },
+        replaceState() { },
+        scrollRestoration: null as any
+    };
+
+    currentHref: string;
+
+    setCurrentHref(href: string) {
+        this.currentHref = href;
+        this.onPopState();
+    }
+
+    getCurrentUrl() {
+        return this.currentHref;
+        //todo: state?
+        // return new Url({url: this.currentHref, state: this.history.state});
+    }
+
+    listen() {
+
+    }
+}
+
+
+export interface RouterViewProps {
+    router: Router;
+    isServerSide?: boolean
+}
+
+export class RouterView extends React.Component<RouterViewProps, {}> {
+    constructor(props: RouterViewProps) {
+        super(props);
+        if (!this.props.isServerSide) {
+            this.props.router.afterUpdate.listen(() => this.forceUpdate());
+        }
+    }
+
+    getChildContext() {
+        return { router: this.props.router };
+    }
+
+    static childContextTypes = { router: PropTypes.object };
+
+    render() {
+        const { bindings } = this.props.router.getLastTransition();
+        let Component: React.ReactElement<{}> | null = null;
+        for (let i = bindings.length - 1; i >= 0; i--) {
+            const { route: { component }, props } = bindings[i];
+            Component = React.createElement(component as React.ComponentClass<{}>, props, Component!);
+        }
+        return Component!;
+    }
+}
+
+
+
+export interface LinkProps {
+    url: string;
+    className?: string;
+    exact?: boolean;
+    disabled?: boolean;
+    stopPropagation?: boolean;
+    htmlProps?: React.HTMLAttributes<{}>;
+}
+
+export class Link extends React.Component<LinkProps, {}> {
+    context: { router: Router };
+    static contextTypes = { router: PropTypes.object };
+
+    onClick = (e: React.MouseEvent<{}>) => {
+        if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !this.isLoading) {
+            const { url, stopPropagation } = this.props;
+            this.isLoading = true;
+            this.context.router.changeUrl(url).then(() => {
+                this.isLoading = false;
+                this.forceUpdate();
+            }, () => {
+                this.isLoading = false;
+                this.forceUpdate();
+            })
+            setTimeout(() => {
+                if (this.isLoading) {
+                    this.forceUpdate();
+                }
+            });
+            if (stopPropagation) {
+                e.stopPropagation();
+            }
+            e.preventDefault();
+        }
+    }
+
+    isLoading = false;
+
+    render() {
+        const { url, className = '', exact = false, htmlProps, children } = this.props;
+        const currentUrl = this.context.router.getLastTransition().url;
+        const selected = exact ? currentUrl === url : currentUrl.substring(0, url.length) === url;
+        const cls = 'link' + (selected ? ' link--selected' : '') + (this.isLoading ? ' link--is-loading' : '') + (className === '' ? '' : ' ' + className);
+        const baseProps = { href: url, className: cls, onClick: this.onClick };
+        const props = htmlProps === void 0 ? baseProps : { ...baseProps, ...htmlProps } as any;
+        return React.createElement('a', props, children);
     }
 }

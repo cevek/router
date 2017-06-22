@@ -12,6 +12,6 @@
     "strict": true
   },
   "files": [
-    "src/Router2.ts"
+    "src/Router.ts"
   ]
 }

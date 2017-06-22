@@ -1,4 +1,4 @@
-import {Path} from '../dist/Router2';
+import {Path} from '../dist/Router';
 
 import test from 'ava';
 

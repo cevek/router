@@ -1,4 +1,4 @@
-import {anyRoute, indexRoute, route, Router} from '../dist/Router2';
+import {anyRoute, indexRoute, route, Router} from '../dist/Router';
 import test from 'ava';
 
 function A() {}
