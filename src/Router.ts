@@ -35,7 +35,7 @@ export class Listeners<T> {
 export interface RouteBinding {
     route: Route;
     props: {};
-    usedUrlParams: string[];
+    urlValues: string[];
     usedSearchParams: string[];
     isInit: boolean;
 }
@@ -107,9 +107,9 @@ export class Router {
             this.setUrl(this.transition.url, true);
             return Promise.resolve(this.transition);
         }
-        const { route, urlParams } = r;
+        const { route, urlParams, urlValues } = r;
         const searchParams = {}; //todo:
-        const { removeRouteStack, newRouteStack } = this.makeNewRouteStack(route);
+        const { removeRouteStack, newRouteStack } = this.makeNewRouteStack(route, urlValues);
         const promise = new P<Transition>();
         const transition: Transition = {
             id: ++this.transitionIdx,
@@ -151,12 +151,13 @@ export class Router {
         }
     }
 
-    protected findRoute(url: string): { route: Route, urlParams: {} } | undefined {
+    protected findRoute(url: string) {
         for (let i = 0; i < this.routes.length; i++) {
             const route = this.routes[i];
-            const urlParams = route.match(url);
-            if (urlParams !== void 0) {
-                return { route, urlParams };
+            const res = route.match(url);
+            if (res !== void 0) {
+                const {urlParams, urlValues} = res;
+                return { route, urlParams, urlValues };
             }
         }
         return void 0;
@@ -211,14 +212,14 @@ export class Router {
         return transition.id === this.transitionIdx;
     }
 
-    protected makeNewRouteStack(nextRoute: Route): { removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[] } {
+    protected makeNewRouteStack(nextRoute: Route, nextUrlValues: string[]): { removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[] } {
         const remove: RouteBinding[] = [];
         const newRouteStack: RouteBinding[] = [];
         const nextParents = nextRoute.getParents();
         let start = 0;
         for (let i = 0; i < this.transition.bindings.length; i++) {
             const routeBinding = this.transition.bindings[i];
-            if (routeBinding.route === nextParents[i]) {
+            if (routeBinding.route === nextParents[i] && this.isUrlParamsEqual(routeBinding.urlValues, nextUrlValues, routeBinding.route.getUrlParamsCount())) {
                 start = i + 1;
                 newRouteStack.push(routeBinding);
             } else {
@@ -235,14 +236,26 @@ export class Router {
             newRouteStack.push({
                 route,
                 props: {},
-                usedUrlParams: [],
+                urlValues: [],
                 usedSearchParams: [],
                 isInit: false,
             });
         }
         return { removeRouteStack: remove, newRouteStack };
     }
+
+    protected isUrlParamsEqual(a: string[], b: string[], checkCount: number) {
+        if (a.length < checkCount || b.length < checkCount) return false;
+        for (var i = 0; i < checkCount; i++) {
+            if (a[i] !== b[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
+
+
 
 export interface RouteParams<UrlParams = {}, SearchParams = {}> {
     url: string;
@@ -281,11 +294,14 @@ export class Path {
         }
         const m = path.match(this.regexp);
         if (m === null) return void 0;
-        const params: { [name: string]: string } = {};
+        const urlParams: { [name: string]: string } = {};
+        const urlValues:string[] = [];
         for (let i = 1; i < m.length; i++) {
-            params[this.regexpGroupNames[i]] = decodeURIComponent(m[i] || '');
+            const value = decodeURIComponent(m[i] || '');;
+            urlParams[this.regexpGroupNames[i]] = value;
+            urlValues.push(value);
         }
-        return params;
+        return {urlParams, urlValues};
     }
 
     compile() {
@@ -353,6 +369,10 @@ export class Path {
         }
         return url;
     }
+
+    getParamsCount() {
+        return this.regexpGroupNames.length - 1;
+    }
 }
 
 function escapeRegExp(text: string) {
@@ -364,11 +384,11 @@ function unEscapeRegExp(text: string) {
 }
 
 
-export interface ComponentClass<Props = {}> {
+export interface ComponentClass<UrlParams, SearchParams, Props> {
     [key: string]: any;
 
-    onEnter?: (params: RouteParams) => Promise<Props | Transition>;
-    onLeave?: (params: RouteParams) => Promise<void | false | Transition>;
+    onEnter?: (params: RouteParams<UrlParams, SearchParams>) => Promise<Props | Transition>;
+    onLeave?: (params: RouteParams<UrlParams, SearchParams>) => Promise<void | false | Transition>;
 }
 
 export interface SimpleRoute {
@@ -377,7 +397,7 @@ export interface SimpleRoute {
     // bind: (params: {}) => {};
 }
 
-export function route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, ChildrenMap extends { [name: string]: SimpleRoute } = {}, Props = {}>(pathString: string, component: ComponentClass<Props>, childrenMap = {} as ChildrenMap): ChildrenMap & SimpleRoute & { toUrl(params: UrlParams): string } {
+export function route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, ChildrenMap extends { [name: string]: SimpleRoute } = {}, Props = {}>(pathString: string, component: ComponentClass<UrlParams, SearchParams, Props>, childrenMap = {} as ChildrenMap): ChildrenMap & SimpleRoute & { toUrl(params: UrlParams): string } {
     let children: Route[] = [];
     const keys = Object.keys(childrenMap);
     for (let i = 0; i < keys.length; i++) {
@@ -391,14 +411,14 @@ export function route<UrlParams extends UrlSearchParams = {}, SearchParams exten
     });
 }
 
-export function indexRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<Props>): SimpleRoute {
+export function indexRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<UrlParams, SearchParams, Props>): SimpleRoute {
     const r = new Route<UrlParams, SearchParams, Props>('', component, [], { isIndex: true });
     return {
         route: r
     };
 }
 
-export function anyRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<Props>): SimpleRoute {
+export function anyRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<UrlParams, SearchParams, Props>): SimpleRoute {
     const r = new Route<UrlParams, SearchParams, Props>('', component, [], { isNotFound: true });
     return {
         route: r
@@ -412,7 +432,7 @@ export interface UrlSearchParams {
 
 export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}> {
     parent: Route | undefined = void 0;
-    component: ComponentClass<Props>;
+    component: ComponentClass<UrlParams, SearchParams, Props>;
     children: Route[] = [];
     path: Path;
 
@@ -422,7 +442,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
     isIndex: boolean;
     isAny: boolean;
 
-    constructor(pathString: string, component: ComponentClass<Props>, children: Route[] = [], options: { isNotFound?: boolean, isIndex?: boolean } = {}) {
+    constructor(pathString: string, component: ComponentClass<UrlParams, SearchParams, Props>, children: Route[] = [], options: { isNotFound?: boolean, isIndex?: boolean } = {}) {
         this.isIndex = Boolean(options.isIndex);
         this.isAny = Boolean(options.isNotFound);
 
@@ -481,6 +501,10 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
             children.push(...childRoute.flatChildren());
         }
         return children;
+    }
+
+    getUrlParamsCount() {
+        return this.path.getParamsCount();
     }
 }
 
