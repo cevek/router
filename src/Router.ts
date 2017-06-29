@@ -68,7 +68,7 @@ export class Router {
     afterUpdate = new Listeners();
     urlHistory: UrlHistory;
 
-    constructor(indexRoute: SimpleRoute, urlHistory: UrlHistory) {
+    constructor(indexRoute: Route, urlHistory: UrlHistory) {
         this.urlHistory = urlHistory;
         this.urlHistory.urlChanged.listen(url => {
             this.changeUrl(url, true);
@@ -80,13 +80,11 @@ export class Router {
         return this.changeUrl(this.urlHistory.getCurrentUrl(), true);
     }
 
-    setIndexRoute(indexRoute: SimpleRoute) {
-        this.indexRoute = indexRoute.route;
+    setIndexRoute(indexRoute: Route) {
+        this.indexRoute = indexRoute;
         this.routes = this.indexRoute.flatChildren();
-        this.indexRoute.compile();
         for (let i = 0; i < this.routes.length; i++) {
             const route = this.routes[i];
-            route.compile();
         }
         this.routes.sort((a, b) => {
             /* istanbul ignore if */
@@ -136,7 +134,7 @@ export class Router {
             }
         }).catch(err => {
             this.setUrl(this.transition.url, true);
-            return Promise.reject(promise.reject);
+            promise.reject(err);
         });
         return promise.promise;
     }
@@ -156,7 +154,7 @@ export class Router {
             const route = this.routes[i];
             const res = route.match(url);
             if (res !== void 0) {
-                const {urlParams, urlValues} = res;
+                const { urlParams, urlValues } = res;
                 return { route, urlParams, urlValues };
             }
         }
@@ -295,13 +293,13 @@ export class Path {
         const m = path.match(this.regexp);
         if (m === null) return void 0;
         const urlParams: { [name: string]: string } = {};
-        const urlValues:string[] = [];
+        const urlValues: string[] = [];
         for (let i = 1; i < m.length; i++) {
             const value = decodeURIComponent(m[i] || '');;
             urlParams[this.regexpGroupNames[i]] = value;
             urlValues.push(value);
         }
-        return {urlParams, urlValues};
+        return { urlParams, urlValues };
     }
 
     compile() {
@@ -391,41 +389,6 @@ export interface ComponentClass<UrlParams, SearchParams, Props> {
     onLeave?: (params: RouteParams<UrlParams, SearchParams>) => Promise<void | false | Transition>;
 }
 
-export interface SimpleRoute {
-    //@internal
-    route: Route;
-    // bind: (params: {}) => {};
-}
-
-export function route<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, ChildrenMap extends { [name: string]: SimpleRoute } = {}, Props = {}>(pathString: string, component: ComponentClass<UrlParams, SearchParams, Props>, childrenMap = {} as ChildrenMap): ChildrenMap & SimpleRoute & { toUrl(params: UrlParams): string } {
-    let children: Route[] = [];
-    const keys = Object.keys(childrenMap);
-    for (let i = 0; i < keys.length; i++) {
-        const key = keys[i];
-        children.push(childrenMap[key].route);
-    }
-    const r = new Route<UrlParams, SearchParams, Props>(pathString, component, children);
-    return Object.assign(childrenMap, {
-        toUrl(params: UrlParams) { return this.route.toUrl(params); },
-        route: r
-    });
-}
-
-export function indexRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<UrlParams, SearchParams, Props>): SimpleRoute {
-    const r = new Route<UrlParams, SearchParams, Props>('', component, [], { isIndex: true });
-    return {
-        route: r
-    };
-}
-
-export function anyRoute<UrlParams extends UrlSearchParams = {}, SearchParams extends UrlSearchParams = {}, Props = {}>(component: ComponentClass<UrlParams, SearchParams, Props>): SimpleRoute {
-    const r = new Route<UrlParams, SearchParams, Props>('', component, [], { isNotFound: true });
-    return {
-        route: r
-    };
-}
-
-
 export interface UrlSearchParams {
     [name: string]: string;
 }
@@ -442,23 +405,38 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
     isIndex: boolean;
     isAny: boolean;
 
-    constructor(pathString: string, component: ComponentClass<UrlParams, SearchParams, Props>, children: Route[] = [], options: { isNotFound?: boolean, isIndex?: boolean } = {}) {
+    constructor(pathString: string, component: ComponentClass<UrlParams, SearchParams, Props>, options: { isNotFound?: boolean, isIndex?: boolean } = {}) {
         this.isIndex = Boolean(options.isIndex);
         this.isAny = Boolean(options.isNotFound);
-
-        this.path = new Path(pathString, !this.isAny);
+        
+        this.path = new Path(this.normalizePathString(pathString), !this.isAny).compile();
         this.component = component;
-        for (let i = 0; i < children.length; i++) {
-            const childRoute = children[i];
-            this.addChild(childRoute);
-        }
         this.onEnter = component.onEnter || (() => Promise.resolve({} as Props));
         this.onLeave = component.onLeave || (() => Promise.resolve());
     }
 
-    addChild(route: Route) {
+    addChild<ChildUrlParams extends UrlParams = UrlParams, ChildSearchParams extends SearchParams = SearchParams>(pathString: string, component: ComponentClass<ChildUrlParams, ChildSearchParams, {}>) {
+        var route = new Route<ChildUrlParams, ChildSearchParams>(this.path.pattern + '/' + pathString, component);
+        this.addChildRoute(route);
+        return route;
+    }
+
+    addIndex<ChildUrlParams extends UrlParams = UrlParams, ChildSearchParams extends SearchParams = SearchParams>(component: ComponentClass<ChildUrlParams, ChildSearchParams, {}>) {
+        var route = new Route<ChildUrlParams, ChildSearchParams>(this.path.pattern, component, { isIndex: true });
+        this.addChildRoute(route);
+        return this;
+    }
+
+    addAny<ChildUrlParams extends UrlParams = UrlParams, ChildSearchParams extends SearchParams = SearchParams>(component: ComponentClass<ChildUrlParams, ChildSearchParams, {}>) {
+        var route = new Route<ChildUrlParams, ChildSearchParams>(this.path.pattern, component, { isNotFound: true });
+        this.addChildRoute(route);
+        return this;
+    }
+
+    protected addChildRoute(route: Route) {
         this.children.push(route);
         route.parent = this;
+        return this;
     }
 
     getParents(): Route[] {
@@ -475,19 +453,8 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
         return this.path.parse(url);
     }
 
-    compile() {
-        this.normalizePathString();
-        this.path.compile();
-        for (let i = 0; i < this.children.length; i++) {
-            const child = this.children[i];
-            child.path.pattern = this.path.pattern + '/' + child.path.originalPattern;
-            child.compile();
-        }
-        return this;
-    }
-
-    normalizePathString() {
-        this.path.pattern = ('/' + this.path.pattern).replace(/\/+/g, '/').replace(/\/+$/, '');
+    normalizePathString(pathStr: string) {
+        return ('/' + pathStr).replace(/\/+/g, '/').replace(/\/+$/, '');
     }
 
     toUrl(params: { [name: string]: string | number }) {
