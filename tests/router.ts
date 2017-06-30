@@ -103,13 +103,13 @@ class ProfileSettingsPwd {
 
 var index = new Route('/', A);
 var indexFoo = index.addChild('/f-:foo', Foo);
-var indexFooBar = indexFoo.addChild(':foo', Bar);
+var indexFooBar = indexFoo.addChild(':bar', Bar);
 var indexFooBarBaz = indexFooBar.addChild('/baz/', Baz);
 
 var indexProfile = index.addChild('/profile/:user_id', Profile);
-var indexProfileSettings = index.addChild('/settings/', ProfileSettings);
-var indexProfileSettingsPages = index.addChild('/p-:page', ProfileSettingsPages);
-var indexProfileSettingsPwd = index.addChild('/pwd', ProfileSettingsPwd);
+var indexProfileSettings = indexProfile.addChild('/settings/', ProfileSettings);
+var indexProfileSettingsPages = indexProfileSettings.addChild('/p-:page', ProfileSettingsPages);
+var indexProfileSettingsPwd = indexProfileSettings.addChild('/pwd', ProfileSettingsPwd);
 
 
 function appParams() {
@@ -130,7 +130,7 @@ function fooParams() {
         {
             route: indexFoo,
             props: {fooo: 2, parent: appParams().pop()!.props},
-            urlValues: [],
+            urlValues: ["foo"],
             usedSearchParams: [],
             isInit: true
         },
@@ -143,7 +143,7 @@ function fooBarParams() {
         {
             route: (indexFooBar),
             props: {barr: 3, parent: fooParams().pop()!.props},
-            urlValues: [],
+            urlValues: ['foo', 'BAR'],
             usedSearchParams: [],
             isInit: true
         },
@@ -156,7 +156,7 @@ function profileParams() {
         {
             route: indexProfile,
             props: {profile: 4, parent: appParams().pop()!.props},
-            urlValues: [],
+            urlValues: ["user"],
             usedSearchParams: [],
             isInit: true
         },
@@ -169,7 +169,7 @@ function profileSettingsParams() {
         {
             route: indexProfileSettings,
             props: {profileSettings: 4},
-            urlValues: [],
+            urlValues: ["user"],
             usedSearchParams: [],
             isInit: true
         },
@@ -182,7 +182,7 @@ function profileSettingsPageParams() {
         {
             route: indexProfileSettingsPages,
             props: {},
-            urlValues: [],
+            urlValues: ["user", "1"],
             usedSearchParams: [],
             isInit: true
         },

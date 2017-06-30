@@ -234,7 +234,7 @@ export class Router {
             newRouteStack.push({
                 route,
                 props: {},
-                urlValues: [],
+                urlValues: nextUrlValues.slice(0, route.getUrlParamsCount()),
                 usedSearchParams: [],
                 isInit: false,
             });
