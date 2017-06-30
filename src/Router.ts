@@ -457,7 +457,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
         return ('/' + pathStr).replace(/\/+/g, '/').replace(/\/+$/, '');
     }
 
-    toUrl(params: { [name: string]: string | number }) {
+    toUrl(params: UrlParams, searchParams?: SearchParams) {
         return this.path.toString(params);
     }
 
