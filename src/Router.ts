@@ -34,7 +34,7 @@ export class Listeners<T> {
 
 export interface RouteBinding {
     route: Route;
-    props: {};
+    props: Props;
     urlValues: string[];
     usedSearchParams: string[];
     isInit: boolean;
@@ -43,6 +43,7 @@ export interface RouteBinding {
 export interface Transition {
     id: number;
     route: Route;
+    onEnd: Listeners<void>;
     replaceUrl: boolean;
     url: string;
     urlParams: {},
@@ -50,6 +51,9 @@ export interface Transition {
     bindings: RouteBinding[];
 }
 
+export interface Props {
+    key: number;
+}
 
 export class Router {
     protected routes: Route[];
@@ -57,6 +61,7 @@ export class Router {
     protected transition: Transition = {
         route: (void 0)!,
         id: ++this.transitionIdx,
+        onEnd: new Listeners(),
         replaceUrl: false,
         url: '',
         bindings: [],
@@ -112,6 +117,7 @@ export class Router {
         const transition: Transition = {
             id: ++this.transitionIdx,
             route,
+            onEnd: new Listeners(),
             replaceUrl,
             url,
             bindings: newRouteStack,
@@ -127,12 +133,13 @@ export class Router {
             if (this.isActualTransition(transition)) {
                 this.setUrl(transition.url, false);
                 this.transition = transition;
+                transition.onEnd.call(void 0);
                 promise.resolve(transition);
                 this.afterUpdate.call(transition);
             } else {
                 promise.resolve(this.transition);
             }
-        }).catch(err => {
+        }, err => {
             this.setUrl(this.transition.url, true);
             promise.reject(err);
         });
@@ -166,6 +173,7 @@ export class Router {
         return {
             router: this,
             isDestination,
+            onEnd: transition.onEnd,
             url: transition.url,
             urlParams: transition.urlParams,
             searchParams: transition.searchParams,
@@ -181,8 +189,9 @@ export class Router {
             } else {
                 promise = promise.then(parentProps => {
                     if (!this.isActualTransition(transition)) return {};
-                    return routeBinding.route.onEnter(this.createOnEnterParams(parentProps, transition, routeBinding.route)).then(props => {
+                    return routeBinding.route.onEnter(this.createOnEnterParams(parentProps, transition, routeBinding.route)).then((props: Props) => {
                         if (!this.isActualTransition(transition)) return;
+                        props.key = transition.id;
                         routeBinding.isInit = true;
                         routeBinding.props = props;
                         return props;
@@ -233,7 +242,7 @@ export class Router {
             const route = nextParents[j];
             newRouteStack.push({
                 route,
-                props: {},
+                props: { key: 0 },
                 urlValues: nextUrlValues.slice(0, route.getUrlParamsCount()),
                 usedSearchParams: [],
                 isInit: false,
@@ -258,6 +267,7 @@ export class Router {
 export interface RouteParams<UrlParams = {}, SearchParams = {}> {
     url: string;
     router: Router;
+    onEnd: Listeners<void>;
     urlParams: UrlParams;
     searchParams: SearchParams;
     parentProps: {};
@@ -408,7 +418,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
     constructor(pathString: string, component: ComponentClass<UrlParams, SearchParams, Props>, options: { isNotFound?: boolean, isIndex?: boolean } = {}) {
         this.isIndex = Boolean(options.isIndex);
         this.isAny = Boolean(options.isNotFound);
-        
+
         this.path = new Path(this.normalizePathString(pathString), !this.isAny).compile();
         this.component = component;
         this.onEnter = component.onEnter || (() => Promise.resolve({} as Props));
@@ -626,26 +636,57 @@ export interface LinkProps {
     htmlProps?: React.HTMLAttributes<{}>;
 }
 
-export class Link extends React.Component<LinkProps, {}> {
+export interface LinkState {
+    isLoading: boolean;
+    isSelected: boolean;
+}
+
+export class Link extends React.Component<LinkProps, LinkState> {
     context: { router: Router };
     static contextTypes = { router: PropTypes.object };
+    state = {
+        isLoading: false,
+        isSelected: false
+    }
+    isMounted = false;
+    afterUpdateDisposer: () => void;
+
+    componentDidMount() {
+        this.isMounted = true;
+        this.afterUpdateDisposer = this.context.router.afterUpdate.listen(() => {
+            this.update(false);
+        });
+    }
+
+    componentWillUnmount() {
+        this.isMounted = false;
+        this.afterUpdateDisposer();
+    }
+
+    shouldComponentUpdate(nextProps: LinkProps, nextState: LinkState) {
+        return this.state.isLoading !== nextState.isLoading || this.state.isSelected !== nextState.isSelected;
+    }
 
     onClick = (e: React.MouseEvent<{}>) => {
-        if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !this.isLoading) {
+        if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !this.state.isLoading) {
             const { url, stopPropagation } = this.props;
-            this.isLoading = true;
+            var isLoading = true;
             this.context.router.changeUrl(url).then(() => {
-                this.isLoading = false;
-                this.forceUpdate();
-            }, () => {
-                this.isLoading = false;
-                this.forceUpdate();
+                isLoading = false;
+                this.update(false);
+            }, err => {
+                isLoading = false;
+                this.setState({
+                    isLoading: false
+                });
+                this.update(false);
+                return Promise.reject(err);
             })
             setTimeout(() => {
-                if (this.isLoading) {
-                    this.forceUpdate();
+                if (isLoading) {
+                    this.update(true);
                 }
-            });
+            }, 70);
             if (stopPropagation) {
                 e.stopPropagation();
             }
@@ -653,13 +694,23 @@ export class Link extends React.Component<LinkProps, {}> {
         }
     }
 
-    isLoading = false;
+    update(isLoading: boolean) {
+        const { url, exact = false } = this.props;
+        const routeUrl = url + '/';
+        const currentUrl = this.context.router.getLastTransition().url + '/';
+        const isSelected = exact ? currentUrl === routeUrl : currentUrl.substring(0, routeUrl.length) === routeUrl;
+        if (this.isMounted) {
+            this.setState({
+                isLoading,
+                isSelected
+            });
+        }
+    }
 
     render() {
-        const { url, className = '', exact = false, htmlProps, children } = this.props;
-        const currentUrl = this.context.router.getLastTransition().url;
-        const selected = exact ? currentUrl === url : currentUrl.substring(0, url.length) === url;
-        const cls = 'link' + (selected ? ' link--selected' : '') + (this.isLoading ? ' link--is-loading' : '') + (className === '' ? '' : ' ' + className);
+        const { url, className = '', htmlProps, children } = this.props;
+        const { isLoading, isSelected } = this.state;
+        const cls = 'link' + (isSelected ? ' link--selected' : '') + (isLoading ? ' link--loading' : '') + (className === '' ? '' : ' ' + className);
         const baseProps = { href: url, className: cls, onClick: this.onClick };
         const props = htmlProps === void 0 ? baseProps : { ...baseProps, ...htmlProps } as any;
         return React.createElement('a', props, children);

@@ -1,6 +1,6 @@
 {
-  "name": "router",
-  "version": "1.0.0",
+  "name": "turbo-router",
+  "version": "1.0.0-rc1",
   "description": "",
   "main": "dist/Router.js",
   "typings": "dist/Router.d.ts",
@@ -17,7 +17,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@types/react-dom": "^15.5.0",
+    "@types/react": "^15.0.34",
+    "@types/react-dom": "^15.5.1",
     "nyc": "^11.0.2",
     "prop-types": "^15.5.8",
     "react-prop-types": "^0.4.0"
