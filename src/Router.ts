@@ -52,7 +52,7 @@ export interface Transition {
 }
 
 export interface Props {
-    
+
 }
 
 export class Router {
@@ -243,7 +243,7 @@ export class Router {
             const route = nextParents[j];
             newRouteStack.push({
                 route,
-                props: { },
+                props: {},
                 urlValues: nextUrlValues.slice(0, route.getUrlParamsCount()),
                 searchParams: nextSearchParams,
                 isInit: false,
@@ -643,14 +643,28 @@ export class NodeHistory extends UrlHistory {
 
 export interface RouterViewProps {
     router: Router;
-    isServerSide?: boolean
+    isServerSide?: boolean;
+    scrollPosition?: { get: () => number, set: (pos: number) => void }
 }
 
 export class RouterView extends React.Component<RouterViewProps, {}> {
+    scrollPositions = new Map<string, number>();
     constructor(props: RouterViewProps) {
         super(props);
-        if (!this.props.isServerSide) {
-            this.props.router.afterUpdate.listen(() => this.forceUpdate());
+        if (!props.isServerSide) {
+            props.router.beforeUpdate.listen(() => {
+                if (props.scrollPosition !== void 0) {
+                    var transition = props.router.getLastTransition();
+                    this.scrollPositions.set(transition.url, props.scrollPosition.get());
+                }
+            });
+            props.router.afterUpdate.listen(() => {
+                this.forceUpdate();
+                if (props.scrollPosition !== void 0) {
+                    var transition = props.router.getLastTransition();
+                    props.scrollPosition.set(transition.replaceUrl ? (this.scrollPositions.get(transition.url) || 0) : 0);
+                }
+            });
         }
     }
 
@@ -716,9 +730,9 @@ export class Link extends React.Component<LinkProps, LinkState> {
         this.afterUpdateDisposer();
     }
 
-    shouldComponentUpdate(nextProps: LinkProps, nextState: LinkState) {
-        return this.state.isLoading !== nextState.isLoading || this.state.isActive !== nextState.isActive;
-    }
+    // shouldComponentUpdate(nextProps: LinkProps, nextState: LinkState) {
+    // return this.state.isLoading !== nextState.isLoading || this.state.isActive !== nextState.isActive;
+    // }
 
     onClick = (e: React.MouseEvent<{}>) => {
         if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !this.state.isLoading) {
