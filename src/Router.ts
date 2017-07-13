@@ -225,7 +225,7 @@ export class Router {
         for (let i = 0; i < this.transition.bindings.length; i++) {
             const routeBinding = this.transition.bindings[i];
             // last route must always be uninited
-            if (i + 1 < nextParents.length && 
+            if (i + 1 < nextParents.length &&
                 routeBinding.route === nextParents[i]
                 && this.isUrlParamsEqual(routeBinding.urlValues, nextUrlValues, routeBinding.route.getUrlParamsCount())
                 && this.isUrlSearchParamsEqual(routeBinding.searchParams, nextSearchParams, routeBinding.route.watchSearchParams)
@@ -646,7 +646,7 @@ export class NodeHistory extends UrlHistory {
 export interface RouterViewProps {
     router: Router;
     isServerSide?: boolean;
-    scrollPosition?: { get: () => number, set: (pos: number) => void }
+    scrollRestoration?: typeof browserScrollRestorator;
 }
 
 export class RouterView extends React.Component<RouterViewProps, {}> {
@@ -655,18 +655,24 @@ export class RouterView extends React.Component<RouterViewProps, {}> {
         super(props);
         if (!props.isServerSide) {
             props.router.beforeUpdate.listen(() => {
-                if (props.scrollPosition !== void 0) {
+                if (props.scrollRestoration !== void 0) {
                     var transition = props.router.getLastTransition();
-                    this.scrollPositions.set(transition.url, props.scrollPosition.get());
+                    this.scrollPositions.set(transition.url, props.scrollRestoration.get());
                 }
             });
             props.router.afterUpdate.listen(() => {
                 this.forceUpdate();
-                if (props.scrollPosition !== void 0) {
+                if (props.scrollRestoration !== void 0) {
                     var transition = props.router.getLastTransition();
-                    props.scrollPosition.set(transition.replaceUrl ? (this.scrollPositions.get(transition.url) || 0) : 0);
+                    props.scrollRestoration.set(transition.replaceUrl ? (this.scrollPositions.get(transition.url) || 0) : 0);
                 }
             });
+        }
+    }
+
+    componentDidMount() {
+        if (this.props.scrollRestoration) {
+            this.props.scrollRestoration.init();
         }
     }
 
