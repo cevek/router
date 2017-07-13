@@ -226,7 +226,8 @@ export class Router {
         let start = 0;
         for (let i = 0; i < this.transition.bindings.length; i++) {
             const routeBinding = this.transition.bindings[i];
-            if (routeBinding.route === nextParents[i] && this.isUrlParamsEqual(routeBinding.urlValues, nextUrlValues, routeBinding.route.getUrlParamsCount())) {
+            // last route must always be uninited
+            if (i + 1 < nextParents.length && routeBinding.route === nextParents[i] && this.isUrlParamsEqual(routeBinding.urlValues, nextUrlValues, routeBinding.route.getUrlParamsCount())) {
                 start = i + 1;
                 newRouteStack.push(routeBinding);
             } else {
@@ -264,13 +265,13 @@ export class Router {
 
 
 
-export interface RouteParams<UrlParams = {}, SearchParams = {}> {
+export interface RouteParams<UrlParams = {}, SearchParams = {}, ParentProps = {}> {
     url: string;
     router: Router;
     onEnd: Listeners<void>;
     urlParams: UrlParams;
     searchParams: SearchParams;
-    parentProps: {};
+    parentProps: ParentProps;
     isDestination: boolean;
 }
 
@@ -716,3 +717,9 @@ export class Link extends React.Component<LinkProps, LinkState> {
         return React.createElement('a', props, children);
     }
 }
+
+export const browserScrollRestorator = {
+    init() { history.scrollRestoration = 'manual' },
+    get() { return window.scrollY; },
+    set(pos: number) { window.scrollTo(0, pos); }
+};
