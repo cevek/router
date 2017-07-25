@@ -103,15 +103,18 @@ export class Router {
         return this.transition;
     }
 
+    softReload() {
+        return this.changeUrl(this.transition.url, false, true);
+    }
 
-    changeUrl(url: string, replaceUrl = false): Promise<Transition> {
+    changeUrl(url: string, replaceUrl = false, fullRemakeStack = false): Promise<Transition> {
         const r = this.findRoute(url);
         if (r === void 0) {
             this.setUrl(this.transition.url, true);
             return Promise.resolve(this.transition);
         }
         const { route, urlParams, urlValues, searchQuery } = r;
-        const { removeRouteStack, newRouteStack } = this.makeNewRouteStack(route, urlValues, searchQuery);
+        const { removeRouteStack, newRouteStack } = this.makeNewRouteStack(route, urlValues, searchQuery, fullRemakeStack);
         const promise = new P<Transition>();
         const transition: Transition = {
             id: ++this.transitionIdx,
@@ -217,24 +220,26 @@ export class Router {
         return transition.id === this.transitionIdx;
     }
 
-    protected makeNewRouteStack(nextRoute: Route, nextUrlValues: string[], nextSearchParams: UrlSearchParams): { removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[] } {
+    protected makeNewRouteStack(nextRoute: Route, nextUrlValues: string[], nextSearchParams: UrlSearchParams, fullRemakeStack: boolean): { removeRouteStack: RouteBinding[], newRouteStack: RouteBinding[] } {
         const remove: RouteBinding[] = [];
         const newRouteStack: RouteBinding[] = [];
         const nextParents = nextRoute.getParents();
         let start = 0;
-        for (let i = 0; i < this.transition.bindings.length; i++) {
-            const routeBinding = this.transition.bindings[i];
-            // last route must always be uninited
-            if (i + 1 < nextParents.length &&
-                routeBinding.route === nextParents[i]
-                && this.isUrlParamsEqual(routeBinding.urlValues, nextUrlValues, routeBinding.route.getUrlParamsCount())
-                && this.isUrlSearchParamsEqual(routeBinding.searchParams, nextSearchParams, routeBinding.route.watchSearchParams)
-            ) {
-                start = i + 1;
-                newRouteStack.push(routeBinding);
-            } else {
-                start = i;
-                break;
+        if (fullRemakeStack === false) {
+            for (let i = 0; i < this.transition.bindings.length; i++) {
+                const routeBinding = this.transition.bindings[i];
+                // last route must always be uninited
+                if (i + 1 < nextParents.length &&
+                    routeBinding.route === nextParents[i]
+                    && this.isUrlParamsEqual(routeBinding.urlValues, nextUrlValues, routeBinding.route.getUrlParamsCount())
+                    && this.isUrlSearchParamsEqual(routeBinding.searchParams, nextSearchParams, routeBinding.route.watchSearchParams)
+                ) {
+                    start = i + 1;
+                    newRouteStack.push(routeBinding);
+                } else {
+                    start = i;
+                    break;
+                }
             }
         }
         for (let j = start; j < this.transition.bindings.length; j++) {
