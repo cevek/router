@@ -69,8 +69,8 @@ export class Router {
         searchParams: {}
     };
     indexRoute: Route;
-    beforeUpdate = new Listeners();
-    afterUpdate = new Listeners();
+    beforeUpdate = new Listeners<Transition>();
+    afterUpdate = new Listeners<Transition>();
     urlHistory: UrlHistory;
 
     constructor(indexRoute: Route, urlHistory: UrlHistory) {
@@ -659,18 +659,18 @@ export class RouterView extends React.Component<RouterViewProps, {}> {
     constructor(props: RouterViewProps) {
         super(props);
         if (!props.isServerSide) {
-            props.router.beforeUpdate.listen(() => {
+            let prevTransition = props.router.getLastTransition();
+            props.router.beforeUpdate.listen(transition => {
                 if (props.scrollRestoration !== void 0) {
-                    var transition = props.router.getLastTransition();
-                    this.scrollPositions.set(transition.url, props.scrollRestoration.get());
+                    this.scrollPositions.set(transition.url, props.scrollRestoration.get(transition));
                 }
             });
-            props.router.afterUpdate.listen(() => {
+            props.router.afterUpdate.listen(transition => {
                 this.forceUpdate();
                 if (props.scrollRestoration !== void 0) {
-                    var transition = props.router.getLastTransition();
-                    props.scrollRestoration.set(transition.replaceUrl ? (this.scrollPositions.get(transition.url) || 0) : 0);
+                    props.scrollRestoration.set(transition.replaceUrl ? (this.scrollPositions.get(transition.url) || 0) : 0, transition, prevTransition);
                 }
+                prevTransition = transition;
             });
         }
     }
@@ -809,8 +809,18 @@ export class Link extends React.Component<LinkProps, LinkState> {
     }
 }
 
-export const browserScrollRestorator = {
-    init() { history.scrollRestoration = 'manual' },
-    get() { return window.scrollY; },
-    set(pos: number) { window.scrollTo(0, pos); }
-};
+export class BrowserScrollRestorator {
+     init() {
+        history.scrollRestoration = 'manual';
+    }
+    get(transition: Transition) {
+        return window.scrollY;
+    }
+    set(pos: number, transtion: Transition, prevTransition: Transition) {
+        if (transtion.url.split('?')[0] !== prevTransition.url.split('?')[0]) {
+            window.scrollTo(0, pos);
+        }
+    }
+}
+
+export const browserScrollRestorator = new BrowserScrollRestorator();
