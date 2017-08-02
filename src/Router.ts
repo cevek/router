@@ -126,7 +126,7 @@ export class Router {
             urlParams,
             searchParams: searchQuery,
         };
-        this.beforeUpdate.call(transition);
+        this.beforeUpdate.call(this.transition);
         const startPromise = Promise.resolve({});
         this.resolveStack(startPromise, transition).then(() => {
             if (!this.isActualTransition(transition)) return;
@@ -810,7 +810,7 @@ export class Link extends React.Component<LinkProps, LinkState> {
 }
 
 export class BrowserScrollRestorator {
-     init() {
+    init() {
         history.scrollRestoration = 'manual';
     }
     get(transition: Transition) {
