@@ -728,18 +728,18 @@ export class Link extends React.Component<LinkProps, LinkState> {
         super(props);
         this.state.isActive = this.isActive(router, props);
     }
-    isMounted = false;
+    isMount = false;
     afterUpdateDisposer: () => void;
 
     componentDidMount() {
-        this.isMounted = true;
+        this.isMount = true;
         this.afterUpdateDisposer = this.context.router.afterUpdate.listen(() => {
             this.update(false);
         });
     }
 
     componentWillUnmount() {
-        this.isMounted = false;
+        this.isMount = false;
         this.afterUpdateDisposer();
     }
 
@@ -753,19 +753,19 @@ export class Link extends React.Component<LinkProps, LinkState> {
             var isLoading = true;
             this.context.router.changeUrl(url).then(() => {
                 isLoading = false;
-                if (this.isMounted) {
+                if (this.isMount) {
                     this.update(false);
                     onEnd && onEnd();
                 }
             }, err => {
                 isLoading = false;
-                if (this.isMounted) {
+                if (this.isMount) {
                     this.update(false);
                 }
                 return Promise.reject(err);
             })
             setTimeout(() => {
-                if (isLoading && this.isMounted) {
+                if (isLoading && this.isMount) {
                     this.update(true);
                 }
             }, 70);
@@ -788,7 +788,7 @@ export class Link extends React.Component<LinkProps, LinkState> {
     }
 
     update(isLoading: boolean) {
-        if (this.isMounted) {
+        if (this.isMount) {
             const { url, exact = false } = this.props;
             const routeUrl = url + '/';
             const isActive = this.isActive(this.context.router, this.props);
