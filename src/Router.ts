@@ -484,7 +484,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
     }
 
     match(url: string) {
-        var [url, query] = url.split('?');
+        var [_, url, query, hash] = url.match(/^(.*?)(?:\?(.*?))?(?:\#(.*?))?$/) || ['', '', '', ''];
         var res = this.path.parse(url);
         if (res === void 0) {
             return void 0;
@@ -666,10 +666,10 @@ export class RouterView extends React.Component<RouterViewProps, {}> {
                 }
             });
             props.router.afterUpdate.listen(transition => {
-                this.forceUpdate();
                 if (props.scrollRestoration !== void 0) {
                     props.scrollRestoration.set(transition.replaceUrl ? (this.scrollPositions.get(transition.url) || 0) : 0, transition, prevTransition);
                 }
+                this.forceUpdate();
                 prevTransition = transition;
             });
         }
