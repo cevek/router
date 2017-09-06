@@ -701,6 +701,7 @@ export class RouterView extends React.Component<RouterViewProps, {}> {
 
 
 export interface LinkProps {
+    tag?: string;
     url: string;
     className?: string;
     loadingClassName?: string;
@@ -717,7 +718,7 @@ export interface LinkState {
     isActive: boolean;
 }
 
-export class Link extends React.Component<LinkProps, LinkState> {
+export class Link extends React.PureComponent<LinkProps, LinkState> {
     context: { router: Router };
     static contextTypes = { router: PropTypes.object };
     state = {
@@ -800,12 +801,15 @@ export class Link extends React.Component<LinkProps, LinkState> {
     }
 
     render() {
-        const { url, className = '', activeClassName = 'link--active', loadingClassName = 'link--loading', htmlProps, children } = this.props;
+        const { url, tag = 'a', className = '', activeClassName = 'link--active', loadingClassName = 'link--loading', htmlProps, children } = this.props;
         const { isLoading, isActive } = this.state;
         const cls = 'link' + (isActive ? ` ${activeClassName}` : '') + (isLoading ? ` ${loadingClassName}` : '') + (className === '' ? '' : ' ' + className);
-        const baseProps = { href: url, className: cls, onClick: this.onClick };
+        const baseProps:any = { className: cls, onClick: this.onClick };
+        if (tag === 'a') {
+            baseProps.href = url;
+        }
         const props = htmlProps === void 0 ? baseProps : { ...baseProps, ...htmlProps } as any;
-        return React.createElement('a', props, children);
+        return React.createElement(tag, props, children);
     }
 }
 
