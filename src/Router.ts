@@ -15,7 +15,7 @@ var __rest = function (s:any, e:string[]) {
     var keys = Object.keys(s);
     for (var i = 0; i < keys.length; i++) {
         var key = keys[i];
-        if (e.indexOf(key) > -1) t[key] = s[key];
+        if (e.indexOf(key) === -1) t[key] = s[key];
     }
     return t;
 };
@@ -823,7 +823,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
         const { url, tag = 'a', className = '', activeClassName = 'link--active', loadingClassName = 'link--loading', children, onEnd, exact, stopPropagation, ...other } = this.props;
         const { isLoading, isActive } = this.state;
         const cls = 'link' + (isActive ? ` ${activeClassName}` : '') + (isLoading ? ` ${loadingClassName}` : '') + (className === '' ? '' : ' ' + className);
-        const props = { ...other, className: cls, onClick: this.onClick, href: tag === 'a' ? url : void 0 };
+        const props = { ...other, className: cls, onClick: this.onClick, href: (tag === 'a' ? url : void 0) };
         return React.createElement(tag, props, children);
     }
 }
