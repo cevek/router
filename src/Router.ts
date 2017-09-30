@@ -10,6 +10,16 @@ class P<T = {}> {
     });
 }
 
+var __rest = function (s:any, e:string[]) {
+    var t:any = {};
+    var keys = Object.keys(s);
+    for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (e.indexOf(key) > -1) t[key] = s[key];
+    }
+    return t;
+};
+
 export class Listeners<T> {
     protected listeners: ((value: T) => void)[] = [];
 
@@ -48,6 +58,7 @@ export interface Transition {
     url: string;
     urlParams: {},
     searchParams: {},
+    hash: string,
     bindings: RouteBinding[];
 }
 
@@ -66,7 +77,8 @@ export class Router {
         url: '',
         bindings: [],
         urlParams: {},
-        searchParams: {}
+        searchParams: {},
+        hash: '',
     };
     indexRoute: Route;
     beforeUpdate = new Listeners<Transition>();
@@ -113,7 +125,7 @@ export class Router {
             this.setUrl(this.transition.url, true);
             return Promise.resolve(this.transition);
         }
-        const { route, urlParams, urlValues, searchQuery } = r;
+        const { route, urlParams, urlValues, searchQuery, hash } = r;
         const { removeRouteStack, newRouteStack } = this.makeNewRouteStack(route, urlValues, searchQuery, fullRemakeStack);
         const promise = new P<Transition>();
         const transition: Transition = {
@@ -125,6 +137,7 @@ export class Router {
             bindings: newRouteStack,
             urlParams,
             searchParams: searchQuery,
+            hash,
         };
         this.beforeUpdate.call(this.transition);
         const startPromise = Promise.resolve({});
@@ -133,11 +146,15 @@ export class Router {
             return this.leaveStack(transition, removeRouteStack);
         }).then(() => {
             if (this.isActualTransition(transition)) {
-                this.setUrl(transition.url, false);
-                this.transition = transition;
-                transition.onEnd.call(void 0);
-                promise.resolve(transition);
-                this.afterUpdate.call(transition);
+                setTimeout(() => {
+                    if (this.isActualTransition(transition)) {
+                        this.setUrl(transition.url, false);
+                        this.transition = transition;
+                        transition.onEnd.call(void 0);
+                        promise.resolve(transition);
+                        this.afterUpdate.call(transition);
+                    }
+                });
             } else {
                 promise.resolve(this.transition);
             }
@@ -163,8 +180,8 @@ export class Router {
             const route = this.routes[i];
             const res = route.match(url);
             if (res !== void 0) {
-                const { urlParams, urlValues, searchQuery } = res;
-                return { route, urlParams, urlValues, searchQuery };
+                const { urlParams, urlValues, searchQuery, hash } = res;
+                return { route, urlParams, urlValues, searchQuery, hash };
             }
         }
         return void 0;
@@ -179,6 +196,7 @@ export class Router {
             url: transition.url,
             urlParams: transition.urlParams,
             searchParams: transition.searchParams,
+            hash: transition.hash,
             parentProps,
         };
     }
@@ -288,6 +306,7 @@ export interface RouteParams<UrlParams = {}, SearchParams = {}, ParentProps = {}
     onEnd: Listeners<void>;
     urlParams: UrlParams;
     searchParams: SearchParams;
+    hash: string;
     parentProps: ParentProps;
     isDestination: boolean;
 }
@@ -393,6 +412,7 @@ export class Path {
                 url += part.value;
             }
         }
+        if (url === '') url = '/';
         return url;
     }
 
@@ -491,6 +511,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
         }
         var newRes = res as any;
         newRes.searchQuery = {};
+        newRes.hash = hash;
         if (query !== void 0) {
             var re = /(.*?)=(.*?)(&|$)/g
             let m;
@@ -498,7 +519,7 @@ export class Route<UrlParams extends UrlSearchParams = {}, SearchParams extends 
                 newRes.searchQuery[decodeURIComponent(m[1])] = decodeURIComponent(m[2]);
             }
         }
-        return newRes as typeof res & { searchQuery: { [key: string]: string } };
+        return newRes as typeof res & { searchQuery: { [key: string]: string }; hash: string };
     }
 
     normalizePathString(pathStr: string) {
@@ -591,7 +612,7 @@ export class BrowserHistory extends UrlHistory {
     history = window.history;
 
     getCurrentUrl() {
-        return window.location.pathname + window.location.search;
+        return window.location.pathname + window.location.search + window.location.hash;
         //todo: state?
         // return new Url({url: window.location.pathname + window.location.search, state: this.history.state});
     }
@@ -699,8 +720,7 @@ export class RouterView extends React.Component<RouterViewProps, {}> {
 }
 
 
-
-export interface LinkProps {
+export interface LinkProps extends React.HTMLAttributes<{}>{
     tag?: string;
     url: string;
     className?: string;
@@ -709,7 +729,6 @@ export interface LinkProps {
     exact?: boolean;
     disabled?: boolean;
     stopPropagation?: boolean;
-    htmlProps?: React.HTMLAttributes<{}>;
     onEnd?: () => void;
 }
 
@@ -801,14 +820,10 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     }
 
     render() {
-        const { url, tag = 'a', className = '', activeClassName = 'link--active', loadingClassName = 'link--loading', htmlProps, children } = this.props;
+        const { url, tag = 'a', className = '', activeClassName = 'link--active', loadingClassName = 'link--loading', children, onEnd, exact, stopPropagation, ...other } = this.props;
         const { isLoading, isActive } = this.state;
         const cls = 'link' + (isActive ? ` ${activeClassName}` : '') + (isLoading ? ` ${loadingClassName}` : '') + (className === '' ? '' : ' ' + className);
-        const baseProps:any = { className: cls, onClick: this.onClick };
-        if (tag === 'a') {
-            baseProps.href = url;
-        }
-        const props = htmlProps === void 0 ? baseProps : { ...baseProps, ...htmlProps } as any;
+        const props = { ...other, className: cls, onClick: this.onClick, href: tag === 'a' ? url : void 0 };
         return React.createElement(tag, props, children);
     }
 }
@@ -823,6 +838,12 @@ export class BrowserScrollRestorator {
     set(pos: number, transtion: Transition, prevTransition: Transition) {
         if (transtion.url.split('?')[0] !== prevTransition.url.split('?')[0]) {
             window.scrollTo(0, pos);
+        }
+        if (transtion.hash !== void 0) {
+            var element = document.getElementById(transtion.hash)
+            if (element) {
+                window.scrollTo(0, element.offsetTop);
+            }
         }
     }
 }
