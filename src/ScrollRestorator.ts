@@ -1,4 +1,4 @@
-import { Transition } from "./Transition";
+import { RouterState } from "./RouterState";
 import { PublicRouter } from "./PublicRouter";
 
 // export class BrowserScrollRestorator {

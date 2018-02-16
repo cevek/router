@@ -1,35 +1,36 @@
 import * as React from 'react';
 import { Path } from './Path';
-import { Params } from './Transition';
+import { Params } from './RouterState';
 import { createViewComponent } from './ViewComponent';
 import { ConvertToRoute, RouteType, Diff, Force, Any } from './Helpers';
 import { PublicRouter } from './PublicRouter';
 
 export type Component<Params> =
-    | (() => React.ComponentClass<Partial<PublicRoute<Params>>>)
-    | (() => Promise<React.ComponentClass<Partial<PublicRoute<Params>>>>)
-    | (() => Promise<{ default: React.ComponentClass<Partial<PublicRoute<Params>>> }>);
+    | (() => React.ComponentType<Partial<PublicRoute<Params>>>)
+    | (() => Promise<React.ComponentType<Partial<PublicRoute<Params>>>>)
+    | (() => Promise<{ default: React.ComponentType<Partial<PublicRoute<Params>>> }>);
 
-export interface RouteJson<T = {}> {
-    url: string;
+export interface BaseRouteJson<T = {}> {
     params?: T;
-    isExact?: boolean;
     resolve?: (publicRouter: PublicRouter) => void;
     redirectTo?(): string;
+    component?: { [key: string]: Component<T> };
+}
+export interface RouteJson<T = {}> extends BaseRouteJson<T> {
+    url: string;
     redirectToIfExact?(): string;
-    index?: RouteJson;
-    notFound?: RouteJson;
+    index?: BaseRouteJson;
+    any?: BaseRouteJson;
     component?: { [key: string]: Component<T> };
 }
 export const routeProps: (keyof RouteJson)[] = [
     'url',
     'params',
-    'isExact',
     'resolve',
     'redirectTo',
     'redirectToIfExact',
     'index',
-    'notFound',
+    'any',
     'component',
 ];
 export function createRoute<T extends RouteJson>(t: T) {
@@ -39,7 +40,7 @@ export function createRoute<T extends RouteJson>(t: T) {
 
 export class PublicRoute<T = {}> {
     // private $type: PublicRouter<T> = undefined!;
-    constructor(protected _route: InnerRoute) {
+    constructor(public _route: InnerRoute) {
         this.component = { View: createViewComponent(_route) };
     }
     toUrl(params: T) {
@@ -50,38 +51,46 @@ export class PublicRoute<T = {}> {
     }
 
     component: {
-        View: React.ComponentClass<{ component: React.ComponentClass<PublicRouter<T>> }>;
+        View: React.ComponentClass<
+            { component: React.ComponentType<PublicRouter<T>> } | { children: React.ComponentType<PublicRouter<T>> }
+        >;
     };
 }
 
-export class PublicRouteOpened extends PublicRoute {
-    _route: InnerRoute = undefined!;
-}
-
 export class InnerRoute {
+    static id = 1;
+    id = InnerRoute.id++;
     parent?: InnerRoute;
     path: Path;
     children: InnerRoute[] = [];
     isIndex: boolean;
-    isNotFound: boolean;
+    isAny: boolean;
     publicRoute: PublicRoute;
     resolvedComponents: { [key: string]: React.ComponentClass<PublicRouter> } = {};
-    resolve: (publicRouter: PublicRouter) => void;
-    constructor(public routeJson: RouteJson, parent: InnerRoute | undefined, isIndex: boolean, isNotFound: boolean) {
+    resolve: (publicRouter: PublicRouter) => void | boolean;
+    constructor(public routeJson: RouteJson, parent: InnerRoute | undefined, isIndex: boolean, isAny: boolean) {
         this.parent = parent;
         this.isIndex = isIndex;
-        this.isNotFound = isNotFound;
+        this.isAny = isAny;
+        this.publicRoute = new PublicRoute(this);
         const parentPath = this.parent === void 0 ? '' : this.parent.path.pattern + '/';
-        this.path = new Path(parentPath + routeJson.url, routeJson.params, !!routeJson.isExact);
+        this.path = new Path(parentPath + routeJson.url, routeJson.params, !isAny);
         if (routeJson.index !== void 0) {
-            this.children.push(new InnerRoute(routeJson.index, this, true, false));
+            (routeJson.index as RouteJson).url = '/';
+            const route = new InnerRoute(routeJson.index as RouteJson, this, true, false);
+            this.children.push(route);
+            (this.publicRoute as Any).index = route.publicRoute;
         }
-        if (routeJson.notFound !== void 0) {
-            this.children.push(new InnerRoute(routeJson.notFound, this, false, true));
+
+        if (routeJson.any !== void 0) {
+            (routeJson.any as RouteJson).url = '/';
+            const route = new InnerRoute(routeJson.any as RouteJson, this, false, true);
+            this.children.push(route);
+            (this.publicRoute as Any).any = route.publicRoute;
         }
+
         this.resolve = routeJson.resolve ? routeJson.resolve : () => true;
         const keys = Object.keys(routeJson);
-        this.publicRoute = new PublicRoute(this);
         for (let i = 0; i < keys.length; i++) {
             const key = keys[i] as keyof RouteJson;
             if (routeProps.indexOf(key) > -1) continue;

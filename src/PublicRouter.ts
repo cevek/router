@@ -7,8 +7,8 @@ export class PublicRouter<T = {}> {
     params: T;
     hash: string;
     url: string;
-    protected route: InnerRoute;
-    protected onCommitListener = new Listeners();
+    route: InnerRoute;
+    onCommitListener = new Listeners();
     constructor(route: InnerRoute, urlParams: UrlParams, private changeUrl: (url: string) => void) {
         this.route = route;
         this.url = urlParams.url;
@@ -25,9 +25,4 @@ export class PublicRouter<T = {}> {
     redirect(route: PublicRoute<any>, params: {}, options?: {}) {
         this.changeUrl(route.toUrl(params));
     }
-}
-
-export class PublicRouterOpened extends PublicRouter {
-    onCommitListener = new Listeners();
-    route: InnerRoute = undefined!;
 }

@@ -17,6 +17,7 @@ const route = createRoute({
         component: { Foo: () => import('./TestComponent') },
         sport: {
             url: 'sport/:sport',
+            resolve: resolveSport,
             redirectToIfExact: () => route.lang.sport.player.toUrlUsing(route.lang.sport, { player: '' }),
             params: { sport: '' },
             player: {
@@ -35,7 +36,9 @@ const route = createRoute({
             url: 'login',
             resolve: resolveAuth,
         },
+        any: {},
     },
+    any: {},
 });
 
 console.log(route);
@@ -55,9 +58,25 @@ class SportView extends React.Component<RouteProps<typeof route.lang.sport>> {
     }
 }
 
-function resolveLang(p: RouteProps<typeof route.lang>) {
+function wait(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function resolveLang(p: RouteProps<typeof route.lang>) {
+    p.onCommit(() => {
+        
+    });
+    await wait(1000);
+    // return false;
     // p.params.lang;
     // p.redirect(route.lang.sport.player, { sport: 'fooball', player: 'zaharov' });
+}
+
+async function resolveSport(p: RouteProps<typeof route.lang.sport>) {
+    await wait(1000);
+    // p.params.lang;
+    // p.redirect(route.lang.sport.player, { sport: 'fooball', player: 'zaharov' });
+    // return false;
 }
 
 function resolveAuth(p: RouteProps<typeof route.lang.login>) {
@@ -68,15 +87,26 @@ function resolveAuth(p: RouteProps<typeof route.lang.login>) {
 
 var history = new BrowserHistory();
 var router = new Router(route, history);
-router.init().then(() => {
-    ReactDOM.render(
-        <RouterProvider router={router}>
-            <route.lang.component.Foo />
-            <route.lang.sport.component.View component={SportView} />
-            {/* <Link to={route.lang.sport.player.teams.toUrlUsing(route.lang.sport.player, { team: 'spartak' })}>
+var root = document.body.appendChild(document.createElement('div'));
+var loading = document.body.appendChild(document.createElement('div'));
+loading.innerHTML = 'Loading...';
+router
+    .init()
+    .then(() => {
+        loading.innerHTML = '';
+        ReactDOM.render(
+            <RouterProvider router={router}>
+                <route.lang.component.Foo />
+                <route.lang.sport.component.View component={SportView} />
+                {/* <Link to={route.lang.sport.player.teams.toUrlUsing(route.lang.sport.player, { team: 'spartak' })}>
                 Spartak
             </Link> */}
-        </RouterProvider>,
-        document.body.appendChild(document.createElement('div'))
-    );
-});
+                <route.any.component.View component={() => <div>Not Found</div>} />
+                <route.lang.any.component.View component={() => <div>Lang not found</div>} />
+            </RouterProvider>,
+            root
+        );
+    })
+    .catch(err => {
+        loading.innerHTML = 'Error: ' + err;
+    });

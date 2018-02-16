@@ -5,7 +5,7 @@ export interface PathPart {
     isOptional: boolean;
 }
 
-export interface UrlParams {
+export interface UrlParams<T = {}> {
     url: string;
     pathParams: { [key: string]: string };
     pathValues: string[];
@@ -25,11 +25,11 @@ export class Path {
     originalPattern: string;
     pattern: string;
 
-    constructor(pattern: string, params: { [key: string]: string } | undefined, isExact = true) {
+    constructor(pattern: string, params: { [key: string]: string } | undefined, isExact: boolean) {
         this.pattern = this.normalize(pattern);
         this.isExact = isExact;
         this.originalPattern = pattern;
-        const { groupNames, pathParts, regexp } = this.compile(pattern, isExact);
+        const { groupNames, pathParts, regexp } = this.compile(this.pattern, isExact);
         this.regexpGroupNames = groupNames;
         this.parts = pathParts;
         this.regexp = regexp;

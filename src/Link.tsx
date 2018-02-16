@@ -33,7 +33,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     afterUpdateDisposer: () => void;
 
     componentWillMount() {
-        this.state.isActive = this.context.router.transition.publicRouter !== void 0 && this.isActive();
+        this.state.isActive = this.context.router.state.publicRouter !== void 0 && this.isActive();
     }
 
     componentDidMount() {
@@ -55,10 +55,10 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     getUrl() {
         const { to } = this.props;
         if (typeof to === 'function') {
-            if (this.context.router.transition.publicRouter === void 0) {
+            if (this.context.router.state.publicRouter === void 0) {
                 return void 0;
             }
-            return to(this.context.router.transition.publicRouter.params);
+            return to(this.context.router.state.publicRouter.params);
         }
         return to;
     }
@@ -100,7 +100,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     isActive() {
         const { exact = false } = this.props;
         const routeUrl = this.getUrl();
-        const currentUrl = this.context.router.getLastTransition().url;
+        const currentUrl = this.context.router.getState().url;
         if (exact) {
             return currentUrl === routeUrl;
         }
