@@ -1,7 +1,7 @@
 import * as React from 'react';
 import * as PropTypes from 'prop-types';
 import { Router } from './Router';
-import { PublicRoute, PublicRouteOpened } from './Route';
+import { PublicRoute } from './Route';
 import { UrlHistory } from './History';
 
 export interface RouterProviderProps {

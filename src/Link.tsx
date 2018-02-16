@@ -33,7 +33,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     afterUpdateDisposer: () => void;
 
     componentWillMount() {
-        this.state.isActive = this.context.router.state.publicRouter !== void 0 && this.isActive();
+        this.state.isActive = this.isActive();
     }
 
     componentDidMount() {
@@ -55,16 +55,13 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     getUrl() {
         const { to } = this.props;
         if (typeof to === 'function') {
-            if (this.context.router.state.publicRouter === void 0) {
-                return void 0;
-            }
-            return to(this.context.router.state.publicRouter.params);
+            return to(this.context.router.getState().urlParams.params);
         }
         return to;
     }
 
     onClick = (e: React.MouseEvent<{}>) => {
-        if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && !this.state.isLoading) {
+        if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
             const { stopPropagation, onEnd } = this.props;
             if (stopPropagation) {
                 e.stopPropagation();
@@ -73,7 +70,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
             const url = this.getUrl();
             if (url === void 0) return;
             let isLoading = true;
-            this.context.router.changeUrl(url).then(
+            this.context.router.redirect(url).then(
                 () => {
                     isLoading = false;
                     if (this.isMount) {

@@ -1,125 +1,43 @@
 import { UrlParams } from './Path';
 import { PublicRoute, InnerRoute } from './Route';
-import { PublicRouter } from './PublicRouter';
+import { Router } from './Router';
+import { Any } from './Helpers';
 
 export type Params = { [key: string]: string };
 
 export class RouterState {
     static id = 0;
     id = RouterState.id++;
-    // onCommit = new Listeners<void>();
-    // type: Type;
     url: string;
-    // topRoute: InnerRoute;
-    publicRouter: PublicRouter;
     urlParams: UrlParams;
-    routeStack: { route: InnerRoute; isInit: boolean }[] = [];
+    route: InnerRoute;
     removeRouteStack: InnerRoute[] = [];
-    
-    constructor({
-        url,
-        topRoute,
-        publicRouter,
-        prevState,
-        urlParams,
-        fullRemakeStack,
-    }: {
-        url: string;
-        publicRouter: PublicRouter;
-        topRoute: InnerRoute;
-        urlParams: UrlParams;
-        fullRemakeStack: boolean;
-        prevState?: RouterState;
-    }) {
-        this.url = url;
-        // this.topRoute = topRoute;
-        this.publicRouter = publicRouter;
-        this.urlParams = urlParams;
-        if (prevState !== void 0) {
-            this.makeNewRouteStack(prevState, topRoute, urlParams.params, urlParams.values, fullRemakeStack);
-        }
-    }
 
-    
+    constructor({ url, route, urlParams }: { url: string; route: InnerRoute; urlParams: UrlParams }) {
+        this.url = url;
+        this.route = route;
+        this.urlParams = urlParams;
+    }
 
     isActual() {
         return this.id === RouterState.id - 1;
     }
 
-    isRouteActive(r: InnerRoute) {
-        const { routeStack } = this;
-        for (let i = 0; i < routeStack.length; i++) {
-            const { route } = routeStack[i];
-            if (r === route) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    makeNewRouteStack(
-        prevState: RouterState,
-        nextRoute: InnerRoute,
-        nextParams: Params,
-        nextParamsValues: string[],
-        fullRemakeStack: boolean
-    ) {
-        const removeRouteStack = [];
-        const newRouteStack = [];
-        const nextParents = nextRoute.getParents();
-        let start = 0;
-        if (fullRemakeStack === false) {
-            for (let i = 0; i < prevState.routeStack.length; i++) {
-                const routeBinding = prevState.routeStack[i];
-                // last route must always be uninited
-                if (
-                    i + 1 < nextParents.length &&
-                    routeBinding.route === nextParents[i] &&
-                    arraysEqual(
-                        prevState.urlParams.values,
-                        nextParamsValues,
-                        routeBinding.route.path.getAllParamsCount()
-                    )
-                ) {
-                    start = i + 1;
-                    newRouteStack.push(routeBinding);
-                } else {
-                    start = i;
-                    break;
-                }
-            }
-        }
-        for (let j = start; j < prevState.routeStack.length; j++) {
-            const { route } = prevState.routeStack[j];
-            removeRouteStack.push(route);
-        }
-        for (let j = start; j < nextParents.length; j++) {
-            const route = nextParents[j];
-            newRouteStack.push({
-                route,
-                isInit: false,
-            });
-        }
-        this.routeStack = newRouteStack;
-        this.removeRouteStack = removeRouteStack;
-    }
-
-    resolveStack(): Promise<boolean> {
+    resolveStack(router: Router<Any>): Promise<boolean> {
+        const { route } = this;
         const paralellPromises = [];
         let notFoundSignal = false;
-        for (let i = 0; i < this.routeStack.length; i++) {
-            const routeItem = this.routeStack[i];
-            if (!routeItem.isInit) {
-                const promise = Promise.resolve(routeItem.route.resolve(this.publicRouter)).then(data => {
-                    if (data === false) {
-                        notFoundSignal = true;
-                    }
-                    routeItem.isInit = true;
-                    return data;
-                });
-                paralellPromises.push(promise);
-                paralellPromises.push(routeItem.route.resolveComponents());
-            }
+        const stack = route.getParents();
+        for (let i = 0; i < stack.length; i++) {
+            const route = stack[i];
+            const promise = Promise.resolve(route.resolve(router)).then(data => {
+                if (data === false) {
+                    notFoundSignal = true;
+                }
+                return data;
+            });
+            paralellPromises.push(promise);
+            paralellPromises.push(route.resolveComponents());
         }
         return Promise.all(paralellPromises).then(() => notFoundSignal);
     }

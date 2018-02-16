@@ -3,7 +3,7 @@ import { Path } from './Path';
 import { Params } from './RouterState';
 import { createViewComponent } from './ViewComponent';
 import { ConvertToRoute, RouteType, Diff, Force, Any } from './Helpers';
-import { PublicRouter } from './PublicRouter';
+import { Router, PublicRouter } from './Router';
 
 export type Component<Params> =
     | (() => React.ComponentType<Partial<PublicRoute<Params>>>)
@@ -12,7 +12,7 @@ export type Component<Params> =
 
 export interface BaseRouteJson<T = {}> {
     params?: T;
-    resolve?: (publicRouter: PublicRouter) => void;
+    resolve?: (router: Router) => void;
     redirectTo?(): string;
     component?: { [key: string]: Component<T> };
 }
@@ -52,7 +52,7 @@ export class PublicRoute<T = {}> {
 
     component: {
         View: React.ComponentClass<
-            { component: React.ComponentType<PublicRouter<T>> } | { children: React.ComponentType<PublicRouter<T>> }
+            { component: React.ComponentType<Router<T>> } | { children: React.ComponentType<Router<T>> }
         >;
     };
 }
@@ -67,7 +67,7 @@ export class InnerRoute {
     isAny: boolean;
     publicRoute: PublicRoute;
     resolvedComponents: { [key: string]: React.ComponentClass<PublicRouter> } = {};
-    resolve: (publicRouter: PublicRouter) => void | boolean;
+    resolve: (router: Router) => void | boolean;
     constructor(public routeJson: RouteJson, parent: InnerRoute | undefined, isIndex: boolean, isAny: boolean) {
         this.parent = parent;
         this.isIndex = isIndex;
@@ -142,6 +142,16 @@ export class InnerRoute {
             r = r.parent;
         }
         return result;
+    }
+    hasParent(route: InnerRoute) {
+        let r: InnerRoute | undefined = this;
+        while (r !== void 0) {
+            if (r === route) {
+                return true;
+            }
+            r = r.parent;
+        }
+        return false;
     }
 }
 

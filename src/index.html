@@ -1,6 +1,31 @@
 <html>
 
 <body>
+    <style>
+        body.loading {
+            cursor: wait;
+        }
+
+        .link {
+            transition: opacity .3s;
+            /* animation: wave 1s ease infinite; */
+        }
+
+        .link--loading {
+            opacity: .3;
+            /* animation: wave 1s ease infinite; */
+        }
+
+        @keyframes wave {
+            0%,
+            100% {
+                opacity: 0.5
+            }
+            50% {
+                opacity: 0.2
+            }
+        }
+    </style>
     <script src="./example.tsx"></script>
 </body>
 

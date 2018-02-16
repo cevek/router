@@ -1,77 +1,69 @@
+import * as React from 'react';
+import { Diff, Any } from './Helpers';
 import { Listeners } from './Listeners';
 import { UrlHistory } from './History';
 import { UrlParams } from './Path';
 import { RouterState } from './RouterState';
 import { InnerRoute, PublicRoute } from './Route';
-import { PublicRouter } from './PublicRouter';
-import * as React from 'react';
+import { PromiseBox } from './PromiseUtils';
 
-export class PromiseHandle<T = {}> {
-    resolve: (value?: T) => void = undefined!;
-    reject: (err: any) => void = undefined!;
-
-    promise = new Promise<T>((_resolve, _reject) => {
-        this.resolve = _resolve;
-        this.reject = _reject;
-    });
+export interface PublicRouter<T = {}> {
+    beforeUpdate: Listeners<PublicRouter<T>>;
+    afterUpdate: Listeners<PublicRouter<T>>;
+    params: T;
+    hash: string;
+    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<void>;
+    redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<T, SubParams & {}>, options?: {}): Promise<void>;
+    redirect(route: string, options?: {}): Promise<void>;
 }
 
-export class PromiseBox<T> {
-    private promiseHandle?: PromiseHandle<T>;
-    getPromise() {
-        return this.promiseHandle !== void 0 ? this.promiseHandle.promise : Promise.resolve();
-    }
-    createIfEmpty() {
-        if (this.promiseHandle === void 0) {
-            this.promiseHandle = new PromiseHandle();
-        }
-    }
-    resolve(value?: T) {
-        if (this.promiseHandle !== void 0) {
-            this.promiseHandle.resolve(value);
-        }
-        this.promiseHandle = undefined;
-    }
-    reject(err?: T) {
-        if (this.promiseHandle !== void 0) {
-            this.promiseHandle.reject(err);
-        }
-        this.promiseHandle = undefined;
-    }
-}
+export class Router<T = {}> implements PublicRouter<T> {
+    beforeUpdate = new Listeners<PublicRouter<T>>();
+    beforeCommit = new Listeners<PublicRouter<T>>();
+    afterUpdate = new Listeners<PublicRouter<T>>();
 
-export class Router {
-    routes: InnerRoute[] = [];
-    indexRoute: InnerRoute;
-    beforeUpdate = new Listeners<PublicRouter>();
-    afterUpdate = new Listeners<PublicRouter>();
-    urlHistory: UrlHistory;
-    inited = false;
-    promiseBox = new PromiseBox<void>();
-    // publicRouter: PublicRouter;
-
-    state = new RouterState({
-        publicRouter: undefined!,
-        topRoute: undefined!,
+    private routes: InnerRoute[] = [];
+    private indexRoute: InnerRoute;
+    private urlHistory: UrlHistory;
+    private inited = false;
+    private promiseBox = new PromiseBox<void>();
+    private state = new RouterState({
         url: undefined!,
+        route: undefined!,
         urlParams: undefined!,
-        fullRemakeStack: false,
-        prevState: undefined!,
     });
+
+    get params() {
+        return (this.state.urlParams.params as {}) as T;
+    }
+
+    get hash() {
+        return this.state.urlParams.hash;
+    }
+
+    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<void>;
+    redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<T, SubParams & {}>, options?: {}): Promise<void>;
+    redirect(route: string, options?: {}): Promise<void>;
+    redirect(route: string | PublicRoute, params?: {}, options?: {}) {
+        return this.changeUrl(
+            typeof route === 'string' ? route : route.toUrl({ ...this.state.urlParams.params, ...params })
+        );
+    }
+
     constructor(indexRoute: PublicRoute, urlHistory: UrlHistory) {
-        // this.publicRouter = new PublicRouter(undefined!, this.changeUrl);
         this.urlHistory = urlHistory;
         this.urlHistory.urlChanged.listen(url => {
-            this.changeUrl(url, true);
+            this.changeUrl(url);
         });
         this.indexRoute = indexRoute._route;
-        this.routes = this.flatChildren([this.indexRoute], this.indexRoute);
+        this.routes = this.flatRouteChildren([this.indexRoute], this.indexRoute);
         this.routes.sort((a, b) => {
             /* istanbul ignore if */
             if (a.path.pattern > b.path.pattern) return -1;
             if (a.path.pattern < b.path.pattern) return 1;
             return a.isIndex ? -1 : 1;
         });
+        this.redirect = this.redirect.bind(this);
     }
 
     init() {
@@ -79,73 +71,83 @@ export class Router {
         return this.changeUrl(this.urlHistory.getCurrentUrl());
     }
 
-    flatChildren(list: InnerRoute[], route: InnerRoute) {
-        for (let i = 0; i < route.children.length; i++) {
-            const child = route.children[i];
-            list.push(child);
-            this.flatChildren(list, child);
+    private changeUrl = (url: string, startFromRouteIdx = 0): Promise<void> => {
+        this.promiseBox.createIfEmpty();
+        const { state, offset } = this.makeStateFromUrl(url, startFromRouteIdx);
+        if (state === void 0) {
+            this.urlHistory.setUrl(this.state.url, true);
+            this.promiseBox.resolve();
+            return Promise.resolve();
         }
-        return list;
-    }
+        this.beforeUpdate.call(this);
+        state.resolveStack(this).then(
+            notFoundSignal => {
+                if (state.isActual()) {
+                    if (notFoundSignal) {
+                        this.changeUrl(url, offset + 1);
+                        return;
+                    }
+                    this.setState(state);
+                }
+            },
+            err => {
+                this.urlHistory.setUrl(this.state.url, true);
+                this.promiseBox.reject(err);
+            }
+        );
+        return this.promiseBox.getPromise();
+    };
 
     getState() {
         return this.state;
     }
 
     softReload() {
-        return this.changeUrl(this.state.url, true);
+        return this.changeUrl(this.state.url);
     }
 
-    changeUrl = (url: string, fullRemakeStack = false, startFromRouteIdx = 0): Promise<void> => {
-        this.promiseBox.createIfEmpty();
-        const { route, urlParams, routeIdx } = this.findRoute(url, startFromRouteIdx);
-        if (route === void 0 || urlParams === void 0) {
-            this.urlHistory.setUrl(this.state.url, true);
-            this.promiseBox.resolve();
-            return Promise.resolve();
+    private flatRouteChildren(list: InnerRoute[], route: InnerRoute) {
+        for (let i = 0; i < route.children.length; i++) {
+            const child = route.children[i];
+            list.push(child);
+            this.flatRouteChildren(list, child);
         }
-        // const promiseHandle = new PromiseHandle<void>();
-        const state = new RouterState({
-            url,
-            topRoute: route,
-            fullRemakeStack,
-            urlParams,
-            publicRouter: new PublicRouter(route, urlParams, this.changeUrl),
-            prevState: this.state,
-        });
-        this.beforeUpdate.call(this.state.publicRouter);
-        // const startPromise = Promise.resolve({});
-        state.resolveStack().then(
-            notFoundSignal => {
-                if (state.isActual()) {
-                    if (notFoundSignal) {
-                        this.changeUrl(url, false, routeIdx + 1);
-                        return;
-                    }
-                    this.applyState(state);
-                }
-            },
-            (err: {}) => {
-                this.urlHistory.setUrl(this.state.url, true);
-                this.promiseBox.reject();
-            }
-        );
-        return this.promiseBox.getPromise();
-    };
+        return list;
+    }
 
-    applyState(state: RouterState) {
+    private makeStateFromUrl(url: string, offset = 0) {
+        const { route, urlParams, routeIdx } = this.findRoute(url, offset);
+        return route === void 0 || urlParams === void 0
+            ? { state: void 0, offset: -1 }
+            : {
+                  state: new RouterState({
+                      url,
+                      route,
+                      urlParams,
+                  }),
+                  offset,
+              };
+    }
+
+    forceSetUrl(url: string) {
+        this.urlHistory.setUrl(url, true);
+        const { state } = this.makeStateFromUrl(url);
+        if (state !== void 0) {
+            this.state = state;
+        }
+        this.afterUpdate.call(this);
+    }
+
+    private setState(state: RouterState) {
+        this.beforeCommit.call(this);
         this.urlHistory.setUrl(state.url, false);
         this.state = state;
-        for (let i = 0; i < state.routeStack.length; i++) {
-            const { route } = state.routeStack[i];
-            // this.publicRouter.onCommitListener.call({});
-        }
+        this.afterUpdate.call(this);
         this.promiseBox.resolve();
-        this.afterUpdate.call(this.state.publicRouter);
     }
 
-    protected findRoute(url: string, startFromIdx = 0) {
-        for (let i = startFromIdx; i < this.routes.length; i++) {
+    private findRoute(url: string, offset = 0) {
+        for (let i = offset; i < this.routes.length; i++) {
             const route = this.routes[i];
             const urlParams = route.path.parse(url);
             if (urlParams !== void 0) return { route, urlParams, routeIdx: i };

@@ -1,24 +1,20 @@
 import * as React from 'react';
 import * as PropTypes from 'prop-types';
 import { InnerRoute, PublicRoute } from './Route';
-import { PublicRouter } from './PublicRouter';
-import { Router } from './Router';
+import { Router, PublicRouter } from './Router';
 import { Any } from './Helpers';
 
 export class ViewComponent extends React.Component {}
 
-export function createViewComponent(
-    route: InnerRoute,
-    component?: () => React.ComponentType<PublicRouter>
-): Any {
+export function createViewComponent(route: InnerRoute, component?: () => React.ComponentType<PublicRouter<Any>>): Any {
     return class View extends React.PureComponent<
         { component: React.ComponentType<PublicRouter<Any>> } | { children: React.ComponentType<PublicRouter<Any>> }
     > {
         router: Router = this.context.router;
         static contextTypes = { router: PropTypes.object };
-        isActive = this.router.state.isRouteActive(route);
+        isActive = this.router.getState().route.hasParent(route);
         dispose = this.router.afterUpdate.listen(r => {
-            const isActive = this.router.state.isRouteActive(route);
+            const isActive = this.router.getState().route.hasParent(route);
             if (this.isActive !== isActive) {
                 this.isActive = isActive;
                 this.forceUpdate();
@@ -28,9 +24,7 @@ export function createViewComponent(
             this.dispose();
         }
         render() {
-            console.log(this);
             if (!this.isActive) return null;
-            const publicRouter = this.router.state.publicRouter;
             let Component;
             const props = this.props as
                 | { children: void; component: React.ComponentType<PublicRouter<Any>> }
@@ -44,8 +38,8 @@ export function createViewComponent(
             } else {
                 return null;
             }
-            // const Component = component === void 0 ? this.props.component : component();
-            return React.createElement(Component, publicRouter);
+            const { afterUpdate, beforeUpdate, hash, params, redirect } = this.router;
+            return React.createElement(Component, { afterUpdate, beforeUpdate, hash, params, redirect });
         }
     };
 }

@@ -36,7 +36,7 @@ const route = createRoute({
             url: 'login',
             resolve: resolveAuth,
         },
-        any: {},
+        // any: {},
     },
     any: {},
 });
@@ -63,9 +63,6 @@ function wait(ms: number) {
 }
 
 async function resolveLang(p: RouteProps<typeof route.lang>) {
-    p.onCommit(() => {
-        
-    });
     await wait(1000);
     // return false;
     // p.params.lang;
@@ -90,6 +87,12 @@ var router = new Router(route, history);
 var root = document.body.appendChild(document.createElement('div'));
 var loading = document.body.appendChild(document.createElement('div'));
 loading.innerHTML = 'Loading...';
+router.beforeUpdate.listen(() => {
+    document.body.classList.add('loading');
+});
+router.afterUpdate.listen(() => {
+    document.body.classList.remove('loading');
+});
 router
     .init()
     .then(() => {
@@ -101,8 +104,14 @@ router
                 {/* <Link to={route.lang.sport.player.teams.toUrlUsing(route.lang.sport.player, { team: 'spartak' })}>
                 Spartak
             </Link> */}
+                <div>
+                    <Link to={route.lang.toUrl({ lang: 'en' })}>English</Link>
+                </div>
+                <div>
+                    <Link to={route.lang.sport.toUrl({ lang: 'ru', sport: 'football' })}>Russian</Link>
+                </div>
                 <route.any.component.View component={() => <div>Not Found</div>} />
-                <route.lang.any.component.View component={() => <div>Lang not found</div>} />
+                {/* <route.lang.any.component.View component={() => <div>Any sport</div>} /> */}
             </RouterProvider>,
             root
         );
