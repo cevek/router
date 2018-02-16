@@ -13,18 +13,18 @@ const route = createRoute({
     lang: {
         url: ':lang',
         resolve: resolveLang,
-        params: { lang: '' },
+        params: { lang: 1, langFoo: '' },
         component: { Foo: () => import('./TestComponent') },
         sport: {
             url: 'sport/:sport',
             resolve: resolveSport,
             redirectToIfExact: () => route.lang.sport.player.toUrlUsing(route.lang.sport, { player: '' }),
-            params: { sport: '' },
+            params: { sport: 1 },
             player: {
                 url: ':player',
-                params: { player: '' },
+                params: { player: 1 },
                 teams: {
-                    params: { team: '' },
+                    params: { team: 1 },
                     url: ':team',
                 },
             },
@@ -108,7 +108,17 @@ router
                     <Link to={route.lang.toUrl({ lang: 'en' })}>English</Link>
                 </div>
                 <div>
-                    <Link to={route.lang.sport.toUrl({ lang: 'ru', sport: 'football' })}>Russian</Link>
+                    <Link exact to={route.lang.toUrl({ lang: 'ru' })}>
+                        Ru exact
+                    </Link>
+                </div>
+                <div>
+                    <Link to={route.lang.toUrl({ lang: 'ru', langFoo: 'bar' })}>Ru</Link>
+                </div>
+                <div>
+                    <Link exact to={route.lang.sport.toUrl({ lang: 'ru', sport: 'football' })}>
+                        Russian
+                    </Link>
                 </div>
                 <route.any.component.View component={() => <div>Not Found</div>} />
                 {/* <route.lang.any.component.View component={() => <div>Any sport</div>} /> */}

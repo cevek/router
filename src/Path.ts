@@ -19,7 +19,8 @@ export interface UrlParams<T = {}> {
 export class Path {
     regexp: RegExp;
     parts: PathPart[];
-    searchParts: string[] = [];
+    paramsKeys: string[] = [];
+    searchKeys: string[] = [];
     regexpGroupNames: string[];
     isExact: boolean;
     originalPattern: string;
@@ -37,8 +38,10 @@ export class Path {
             const keys = Object.keys(params);
             for (let i = 0; i < keys.length; i++) {
                 const key = keys[i];
-                if (params[key] === '?') {
-                    this.searchParts.push(key);
+                if (typeof params[key] === 'string') {
+                    this.searchKeys.push(key);
+                } else {
+                    this.paramsKeys.push(key);
                 }
             }
         }
@@ -66,7 +69,7 @@ export class Path {
         while ((m = re.exec(search))) {
             const key = decodeURIComponent(m[1]);
             const value = decodeURIComponent(m[2]);
-            const pos = this.searchParts.indexOf(key);
+            const pos = this.searchKeys.indexOf(key);
             if (pos > -1) {
                 searchValues[pos] = value;
                 searchParams[key] = value;
@@ -154,15 +157,23 @@ export class Path {
                 url += part.value;
             }
         }
+        let search = '';
+        for (let i = 0; i < this.searchKeys.length; i++) {
+            const key = this.searchKeys[i];
+            const value = params[key];
+            if (typeof value === 'string' || typeof value === 'number') {
+                search += (search === '' ? '?' : '&') + key + '=' + encodeURIComponent(value + '');
+            }
+        }
         if (url === '') url = '/';
-        return url;
+        return url + search;
     }
 
     getPathParamsCount() {
         return this.regexpGroupNames.length - 1;
     }
     getAllParamsCount() {
-        return this.getPathParamsCount() + this.searchParts.length;
+        return this.getPathParamsCount() + this.searchKeys.length;
     }
 
     normalize(pathStr: string) {

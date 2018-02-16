@@ -1,17 +1,12 @@
 {
-  "compilerOptions": {
-    "target": "es6",
-    "module": "commonjs",
-    "lib": [
-      "es6",
-      "dom"
-    ],
-    "jsx": "react",
-    "declaration": true,
-    "outDir": "dist",
-    "strict": true
-  },
-  "files": [
-    "src/Router.ts"
-  ]
+    "compilerOptions": {
+        "target": "es6",
+        "module": "commonjs",
+        "lib": ["es6", "dom"],
+        "jsx": "react",
+        "declaration": true,
+        "outDir": "dist",
+        "strict": true
+    },
+    "exclude": ["node_modules"]
 }

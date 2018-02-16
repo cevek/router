@@ -1,10 +1,11 @@
 import * as React from 'react';
 import * as PropTypes from 'prop-types';
 import { Router } from './Router';
+import { RouteToUrl } from './Route';
 
 export interface LinkProps extends React.HTMLAttributes<{}> {
     tag?: string;
-    to: string | ((fromParams: {}) => string);
+    to: RouteToUrl;
     className?: string;
     loadingClassName?: string;
     activeClassName?: string;
@@ -20,27 +21,22 @@ export interface LinkState {
 }
 
 export class Link extends React.PureComponent<LinkProps, LinkState> {
-    context: { router: Router };
     static contextTypes = { router: PropTypes.object };
+    router: Router = this.context.router;
+
     state = {
         isLoading: false,
         isActive: false,
     };
-    constructor(props: LinkProps, { router }: { router: Router }) {
-        super(props);
-    }
-    isMount = false;
-    afterUpdateDisposer: () => void;
+
+    isMount = true;
+
+    afterUpdateDisposer = this.context.router.afterUpdate.listen(() => {
+        this.update(false);
+    });
 
     componentWillMount() {
         this.state.isActive = this.isActive();
-    }
-
-    componentDidMount() {
-        this.isMount = true;
-        this.afterUpdateDisposer = this.context.router.afterUpdate.listen(() => {
-            this.update(false);
-        });
     }
 
     componentWillUnmount() {
@@ -48,16 +44,9 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
         this.afterUpdateDisposer();
     }
 
-    // shouldComponentUpdate(nextProps: LinkProps, nextState: LinkState) {
-    // return this.state.isLoading !== nextState.isLoading || this.state.isActive !== nextState.isActive;
-    // }
-
     getUrl() {
         const { to } = this.props;
-        if (typeof to === 'function') {
-            return to(this.context.router.getState().urlParams.params);
-        }
-        return to;
+        return this.router.toUrl(to.route, to.params);
     }
 
     onClick = (e: React.MouseEvent<{}>) => {
@@ -70,19 +59,14 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
             const url = this.getUrl();
             if (url === void 0) return;
             let isLoading = true;
-            this.context.router.redirect(url).then(
+            this.router.redirect(url).then(
                 () => {
                     isLoading = false;
-                    if (this.isMount) {
-                        this.update(false);
-                        onEnd && onEnd();
-                    }
+                    this.update(false);
                 },
                 err => {
                     isLoading = false;
-                    if (this.isMount) {
-                        this.update(false);
-                    }
+                    this.update(false);
                     return Promise.reject(err);
                 }
             );
@@ -95,25 +79,26 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
     };
 
     isActive() {
-        const { exact = false } = this.props;
-        const routeUrl = this.getUrl();
-        const currentUrl = this.context.router.getState().url;
-        if (exact) {
-            return currentUrl === routeUrl;
-        }
-        const routeUrlWithoutQuery = routeUrl.split('?')[0];
-        return currentUrl.substring(0, routeUrlWithoutQuery.length) === routeUrlWithoutQuery;
+        const { to, exact } = this.props;
+        const activeRoute = this.router.getState().route;
+        const currentRoute = to.route._route;
+        return (
+            (exact === true ? activeRoute === currentRoute : activeRoute.hasParent(currentRoute)) &&
+            this.router.isCurrentRouteHasSameParams(currentRoute, to.params)
+        );
     }
 
     update(isLoading: boolean) {
         if (this.isMount) {
-            const { exact = false } = this.props;
-            const routeUrl = this.getUrl() + '/';
+            const { onEnd } = this.props;
             const isActive = this.isActive();
             this.setState({
                 isLoading,
                 isActive,
             });
+            if (!isLoading) {
+                onEnd && onEnd();
+            }
         }
     }
 

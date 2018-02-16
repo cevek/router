@@ -33,7 +33,7 @@ export class Router<T = {}> implements PublicRouter<T> {
         urlParams: undefined!,
     });
 
-    get params() {
+    get params(): T {
         return (this.state.urlParams.params as {}) as T;
     }
 
@@ -44,11 +44,14 @@ export class Router<T = {}> implements PublicRouter<T> {
     redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<void>;
     redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<T, SubParams & {}>, options?: {}): Promise<void>;
     redirect(route: string, options?: {}): Promise<void>;
-    redirect(route: string | PublicRoute, params?: {}, options?: {}) {
-        return this.changeUrl(
-            typeof route === 'string' ? route : route.toUrl({ ...this.state.urlParams.params, ...params })
-        );
+    redirect(route: string | PublicRoute, params: {}, options?: {}) {
+        return this.changeUrl(typeof route === 'string' ? route : this.toUrl(route, params));
     }
+
+    toUrl(route: PublicRoute, params: {}) {
+        return route._route.path.toUrl({ ...this.state.urlParams.pathParams, ...params });
+    }
+    
 
     constructor(indexRoute: PublicRoute, urlHistory: UrlHistory) {
         this.urlHistory = urlHistory;
@@ -104,6 +107,17 @@ export class Router<T = {}> implements PublicRouter<T> {
 
     softReload() {
         return this.changeUrl(this.state.url);
+    }
+
+    isCurrentRouteHasSameParams(route: InnerRoute, params: Any) {
+        const parts = route.path.paramsKeys;
+        for (let i = 0; i < parts.length; i++) {
+            const paramName = parts[i];
+            if (params[paramName] !== this.state.urlParams.pathValues[i]) {
+                return false;
+            } 
+        }
+        return true;
     }
 
     private flatRouteChildren(list: InnerRoute[], route: InnerRoute) {

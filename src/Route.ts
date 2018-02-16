@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Path } from './Path';
 import { Params } from './RouterState';
 import { createViewComponent } from './ViewComponent';
-import { ConvertToRoute, RouteType, Diff, Force, Any } from './Helpers';
+import { ConvertToRoute, RouteType, Diff, Any } from './Helpers';
 import { Router, PublicRouter } from './Router';
 
 export type Component<Params> =
@@ -34,20 +34,31 @@ export const routeProps: (keyof RouteJson)[] = [
     'component',
 ];
 export function createRoute<T extends RouteJson>(t: T) {
-    const innerRoute = new InnerRoute(t, undefined!, false, false);
+    const innerRoute = new InnerRoute(t, undefined!, {}, false, false);
     return (innerRoute.publicRoute as {}) as ConvertToRoute<T, RouteType<T>, typeof routeProps>;
 }
 
+export interface RouteToUrl {
+    route: PublicRoute<Any>;
+    params: Any;
+    // keys: string[];
+    // values: string[];
+}
 export class PublicRoute<T = {}> {
     // private $type: PublicRouter<T> = undefined!;
     constructor(public _route: InnerRoute) {
         this.component = { View: createViewComponent(_route) };
     }
-    toUrl(params: T) {
-        return this._route.path.toUrl(params as {});
+    toUrl(params: T): RouteToUrl {
+        // const keys = Object.keys(params);
+        // const values: string[] = [];
+        // for (let i = 0; i < keys.length; i++) {
+        //     values.push((params as Any)[keys[i]]);
+        // }
+        return { route: this, params };
     }
     toUrlUsing<FromParams>(route: PublicRoute<FromParams>, params: Diff<FromParams & {}, T>, options?: {}) {
-        return (fromParams: FromParams) => this._route.path.toUrl({ ...(fromParams as {}), ...(params as {}) });
+        return this.toUrl((params as {}) as T);
     }
 
     component: {
@@ -68,23 +79,30 @@ export class InnerRoute {
     publicRoute: PublicRoute;
     resolvedComponents: { [key: string]: React.ComponentClass<PublicRouter> } = {};
     resolve: (router: Router) => void | boolean;
-    constructor(public routeJson: RouteJson, parent: InnerRoute | undefined, isIndex: boolean, isAny: boolean) {
+    constructor(
+        public routeJson: RouteJson,
+        parent: InnerRoute | undefined,
+        parentParams: { [key: string]: string | number },
+        isIndex: boolean,
+        isAny: boolean
+    ) {
         this.parent = parent;
         this.isIndex = isIndex;
         this.isAny = isAny;
         this.publicRoute = new PublicRoute(this);
+        const params = { ...parentParams, ...routeJson.params };
         const parentPath = this.parent === void 0 ? '' : this.parent.path.pattern + '/';
-        this.path = new Path(parentPath + routeJson.url, routeJson.params, !isAny);
+        this.path = new Path(parentPath + routeJson.url, params, !isAny);
         if (routeJson.index !== void 0) {
             (routeJson.index as RouteJson).url = '/';
-            const route = new InnerRoute(routeJson.index as RouteJson, this, true, false);
+            const route = new InnerRoute(routeJson.index as RouteJson, this, params, true, false);
             this.children.push(route);
             (this.publicRoute as Any).index = route.publicRoute;
         }
 
         if (routeJson.any !== void 0) {
             (routeJson.any as RouteJson).url = '/';
-            const route = new InnerRoute(routeJson.any as RouteJson, this, false, true);
+            const route = new InnerRoute(routeJson.any as RouteJson, this, params, false, true);
             this.children.push(route);
             (this.publicRoute as Any).any = route.publicRoute;
         }
@@ -94,7 +112,7 @@ export class InnerRoute {
         for (let i = 0; i < keys.length; i++) {
             const key = keys[i] as keyof RouteJson;
             if (routeProps.indexOf(key) > -1) continue;
-            const subRoute = new InnerRoute(routeJson[key] as RouteJson, this, false, false);
+            const subRoute = new InnerRoute(routeJson[key] as RouteJson, this, params, false, false);
             this.children.push(subRoute);
             (this.publicRoute as Any)[key] = subRoute.publicRoute;
         }
@@ -143,6 +161,7 @@ export class InnerRoute {
         }
         return result;
     }
+
     hasParent(route: InnerRoute) {
         let r: InnerRoute | undefined = this;
         while (r !== void 0) {
