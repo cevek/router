@@ -27,11 +27,22 @@ export class RouterState {
         const { route } = this;
         const paralellPromises: Promise<Any>[] = [];
         let notFoundSignal = false;
+        let localStore = {};
         const stack = route.getParents();
         let promise = Promise.resolve({});
         for (let i = 0; i < stack.length; i++) {
             const route = stack[i];
-            promise = Promise.resolve(route.resolve(router, promise)).then(data => {
+            promise = Promise.resolve(
+                route.resolve({
+                    url: this.url,
+                    params: this.urlParams.params,
+                    hash: this.urlParams.hash,
+                    store: router.externalState,
+                    localStore: localStore,
+                    parentResult: promise,
+                    router,
+                })
+            ).then(data => {
                 if (data === false) {
                     notFoundSignal = true;
                 }

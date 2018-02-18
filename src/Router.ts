@@ -27,6 +27,7 @@ export class Router<T = {}> implements PublicRouter<T> {
     beforeCommit = new Listeners<PublicRouter<T>>();
     afterUpdate = new Listeners<PublicRouter<T>>();
 
+    externalState: {} = {};
     private routes: InnerRoute[] = [];
     private indexRoute: InnerRoute;
     private urlHistory: UrlHistory;

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Path } from './Path';
 import { Params } from './RouterState';
 import { createViewComponent } from './ViewComponent';
-import { ConvertToRoute, RouteType, Diff, Any } from './Helpers';
+import { ConvertToRoute, RouteType, Diff, Any, PromiseReturnValue } from './Helpers';
 import { Router, PublicRouter, RedirectOptions } from './Router';
 
 export type Component<Params> =
@@ -10,9 +10,19 @@ export type Component<Params> =
     | (() => Promise<React.ComponentType<Partial<PublicRoute<Params>>>>)
     | (() => Promise<{ default: React.ComponentType<Partial<PublicRoute<Params>>> }>);
 
+export interface ResolveParam<Params = {}, Store = {}, LocalStore = {}, ParentPromiseResult = {}> {
+    parentResult: ParentPromiseResult;
+    url: string;
+    store: Store;
+    localStore: LocalStore;
+    params: Params;
+    hash: string;
+    router: Router<Params>;
+}
+
 export interface BaseRouteJson<T = {}> {
     params?: T;
-    resolve?: (router: Router, parentPromise: Promise<{}>) => void;
+    resolve?: (param: ResolveParam) => void;
     redirectTo?(): string;
     component?: { [key: string]: Component<T> };
 }
@@ -26,16 +36,20 @@ export interface RouteJson<T = {}> extends BaseRouteJson<T> {
 export const routeProps: (keyof RouteJson)[] = [
     'url',
     'params',
-    // 'resolve',
+    'resolve',
     'redirectTo',
     'redirectToIfExact',
     'index',
     'any',
     'component',
 ];
-export function createRoute<T extends RouteJson>(t: T) {
+export function createRoute<T extends RouteJson, Store, LocalStore>(
+    t: T,
+    store?: () => Store,
+    localStore?: () => LocalStore
+) {
     const innerRoute = new InnerRoute(t, undefined!, {}, false, false);
-    return (innerRoute.publicRoute as {}) as ConvertToRoute<T, RouteType<T>, typeof routeProps>;
+    return (innerRoute.publicRoute as {}) as ConvertToRoute<T, RouteType<T>, {}, Store, LocalStore, typeof routeProps>;
 }
 
 export interface RouteToUrl {
@@ -45,8 +59,15 @@ export interface RouteToUrl {
     // keys: string[];
     // values: string[];
 }
-export class PublicRoute<T = {}> {
+export class PublicRoute<T = {}, ParentResolve = {}, Store = {}, LocalStore = {}> {
     // private $type: PublicRouter<T> = undefined!;
+
+    // prettier-ignore
+    private resolver!: ParentResolve;
+    // prettier-ignore
+    private store!: Store;
+    // prettier-ignore
+    private localStore!: LocalStore;
     constructor(public _route: InnerRoute) {
         this.component = { View: createViewComponent(_route) };
     }
@@ -69,7 +90,6 @@ export class PublicRoute<T = {}> {
     };
 }
 
-export type ResolveParam<Params, ParentPromiseResult> = { parentResult: ParentPromiseResult; router: Router<Params> };
 export class InnerRoute {
     static id = 1;
     id = InnerRoute.id++;
@@ -80,7 +100,7 @@ export class InnerRoute {
     isAny: boolean;
     publicRoute: PublicRoute;
     resolvedComponents: { [key: string]: React.ComponentClass<PublicRouter> } = {};
-    resolve: (router: Router, parentPromise: Promise<{}>) => Any;
+    resolve: (params: ResolveParam) => Any;
     constructor(
         public routeJson: RouteJson,
         parent: InnerRoute | undefined,
