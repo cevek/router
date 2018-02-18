@@ -140,7 +140,7 @@ export class Path {
         };
     }
 
-    toUrl(params: { [name: string]: string | number }) {
+    toUrl(params: { [name: string]: string | number }, hash?: string) {
         let url = '';
         for (let i = 0; i < this.parts.length; i++) {
             const part = this.parts[i];
@@ -166,7 +166,11 @@ export class Path {
             }
         }
         if (url === '') url = '/';
-        return url + search;
+        url = url + search;
+        if (typeof hash === 'string') {
+            url += '#' + hash;
+        }
+        return url;
     }
 
     getPathParamsCount() {

@@ -7,6 +7,11 @@ import { RouterState } from './RouterState';
 import { InnerRoute, PublicRoute } from './Route';
 import { PromiseBox } from './PromiseUtils';
 
+export interface RedirectOptions {
+    replace?: boolean;
+    hash?: string;
+}
+
 export interface PublicRouter<T = {}> {
     beforeUpdate: Listeners<PublicRouter<T>>;
     afterUpdate: Listeners<PublicRouter<T>>;
@@ -41,22 +46,28 @@ export class Router<T = {}> implements PublicRouter<T> {
         return this.state.urlParams.hash;
     }
 
-    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<void>;
-    redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<T, SubParams & {}>, options?: {}): Promise<void>;
-    redirect(route: string, options?: {}): Promise<void>;
-    redirect(route: string | PublicRoute, params: {}, options?: {}) {
-        return this.changeUrl(typeof route === 'string' ? route : this.toUrl(route, params));
+    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: RedirectOptions): Promise<void>;
+    redirect<SubParams>(
+        route: PublicRoute<SubParams>,
+        params: Diff<T, SubParams & {}>,
+        options?: RedirectOptions
+    ): Promise<void>;
+    redirect(route: string, options?: RedirectOptions): Promise<void>;
+    redirect(route: string | PublicRoute, params: {}, options: RedirectOptions = {}) {
+        return this.changeUrl(
+            typeof route === 'string' ? route : this.toUrl(route, params, options),
+            !!options.replace
+        );
     }
 
-    toUrl(route: PublicRoute, params: {}) {
-        return route._route.path.toUrl({ ...this.state.urlParams.pathParams, ...params });
+    toUrl(route: PublicRoute, params: {}, options: RedirectOptions = {}) {
+        return route._route.path.toUrl({ ...this.state.urlParams.pathParams, ...params }, options.hash);
     }
-    
 
     constructor(indexRoute: PublicRoute, urlHistory: UrlHistory) {
         this.urlHistory = urlHistory;
         this.urlHistory.urlChanged.listen(url => {
-            this.changeUrl(url);
+            this.changeUrl(url, false);
         });
         this.indexRoute = indexRoute._route;
         this.routes = this.flatRouteChildren([this.indexRoute], this.indexRoute);
@@ -71,10 +82,10 @@ export class Router<T = {}> implements PublicRouter<T> {
 
     init() {
         this.inited = true;
-        return this.changeUrl(this.urlHistory.getCurrentUrl());
+        return this.changeUrl(this.urlHistory.getCurrentUrl(), false);
     }
 
-    private changeUrl = (url: string, startFromRouteIdx = 0): Promise<void> => {
+    private changeUrl = (url: string, replace: boolean, startFromRouteIdx = 0): Promise<void> => {
         this.promiseBox.createIfEmpty();
         const { state, offset } = this.makeStateFromUrl(url, startFromRouteIdx);
         if (state === void 0) {
@@ -87,10 +98,10 @@ export class Router<T = {}> implements PublicRouter<T> {
             notFoundSignal => {
                 if (state.isActual()) {
                     if (notFoundSignal) {
-                        this.changeUrl(url, offset + 1);
+                        this.changeUrl(url, replace, offset + 1);
                         return;
                     }
-                    this.setState(state);
+                    this.setState(state, replace);
                 }
             },
             err => {
@@ -106,7 +117,7 @@ export class Router<T = {}> implements PublicRouter<T> {
     }
 
     softReload() {
-        return this.changeUrl(this.state.url);
+        return this.changeUrl(this.state.url, false);
     }
 
     isCurrentRouteHasSameParams(route: InnerRoute, params: Any) {
@@ -115,7 +126,7 @@ export class Router<T = {}> implements PublicRouter<T> {
             const paramName = parts[i];
             if (params[paramName] !== this.state.urlParams.pathValues[i]) {
                 return false;
-            } 
+            }
         }
         return true;
     }
@@ -152,9 +163,9 @@ export class Router<T = {}> implements PublicRouter<T> {
         this.afterUpdate.call(this);
     }
 
-    private setState(state: RouterState) {
+    private setState(state: RouterState, replace: boolean) {
         this.beforeCommit.call(this);
-        this.urlHistory.setUrl(state.url, false);
+        this.urlHistory.setUrl(state.url, replace);
         this.state = state;
         this.afterUpdate.call(this);
         this.promiseBox.resolve();

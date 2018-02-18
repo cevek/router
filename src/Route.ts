@@ -3,7 +3,7 @@ import { Path } from './Path';
 import { Params } from './RouterState';
 import { createViewComponent } from './ViewComponent';
 import { ConvertToRoute, RouteType, Diff, Any } from './Helpers';
-import { Router, PublicRouter } from './Router';
+import { Router, PublicRouter, RedirectOptions } from './Router';
 
 export type Component<Params> =
     | (() => React.ComponentType<Partial<PublicRoute<Params>>>)
@@ -12,7 +12,7 @@ export type Component<Params> =
 
 export interface BaseRouteJson<T = {}> {
     params?: T;
-    resolve?: (router: Router) => void;
+    resolve?: (router: Router, parentPromise: Promise<{}>) => void;
     redirectTo?(): string;
     component?: { [key: string]: Component<T> };
 }
@@ -26,7 +26,7 @@ export interface RouteJson<T = {}> extends BaseRouteJson<T> {
 export const routeProps: (keyof RouteJson)[] = [
     'url',
     'params',
-    'resolve',
+    // 'resolve',
     'redirectTo',
     'redirectToIfExact',
     'index',
@@ -41,6 +41,7 @@ export function createRoute<T extends RouteJson>(t: T) {
 export interface RouteToUrl {
     route: PublicRoute<Any>;
     params: Any;
+    options: RedirectOptions;
     // keys: string[];
     // values: string[];
 }
@@ -49,13 +50,13 @@ export class PublicRoute<T = {}> {
     constructor(public _route: InnerRoute) {
         this.component = { View: createViewComponent(_route) };
     }
-    toUrl(params: T): RouteToUrl {
+    toUrl(params: T, options: RedirectOptions = {}): RouteToUrl {
         // const keys = Object.keys(params);
         // const values: string[] = [];
         // for (let i = 0; i < keys.length; i++) {
         //     values.push((params as Any)[keys[i]]);
         // }
-        return { route: this, params };
+        return { route: this, params, options };
     }
     toUrlUsing<FromParams>(route: PublicRoute<FromParams>, params: Diff<FromParams & {}, T>, options?: {}) {
         return this.toUrl((params as {}) as T);
@@ -68,6 +69,7 @@ export class PublicRoute<T = {}> {
     };
 }
 
+export type ResolveParam<Params, ParentPromiseResult> = { parentResult: ParentPromiseResult; router: Router<Params> };
 export class InnerRoute {
     static id = 1;
     id = InnerRoute.id++;
@@ -78,7 +80,7 @@ export class InnerRoute {
     isAny: boolean;
     publicRoute: PublicRoute;
     resolvedComponents: { [key: string]: React.ComponentClass<PublicRouter> } = {};
-    resolve: (router: Router) => void | boolean;
+    resolve: (router: Router, parentPromise: Promise<{}>) => Any;
     constructor(
         public routeJson: RouteJson,
         parent: InnerRoute | undefined,

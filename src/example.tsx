@@ -3,7 +3,7 @@ import * as ReactDOM from 'react-dom';
 import { Path } from './Path';
 import { PublicRoute, RouteJson, createRoute } from './Route';
 import { Link } from './Link';
-import { RouteProps } from './Helpers';
+import { RouteProps, RouteParentPromise } from './Helpers';
 import { RouterProvider } from './RouterProvider';
 import { BrowserHistory } from './History';
 import { Router } from './Router';
@@ -64,6 +64,7 @@ function wait(ms: number) {
 
 async function resolveLang(p: RouteProps<typeof route.lang>) {
     await wait(1000);
+    return {foo: 1, baR: 2};
     // return false;
     // p.params.lang;
     // p.redirect(route.lang.sport.player, { sport: 'fooball', player: 'zaharov' });
@@ -108,7 +109,7 @@ router
                     <Link to={route.lang.toUrl({ lang: 'en' })}>English</Link>
                 </div>
                 <div>
-                    <Link exact to={route.lang.toUrl({ lang: 'ru' })}>
+                    <Link exact to={route.lang.toUrl({ lang: 'ru' }, {hash: 'foo'})}>
                         Ru exact
                     </Link>
                 </div>

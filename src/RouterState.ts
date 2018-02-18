@@ -25,12 +25,13 @@ export class RouterState {
 
     resolveStack(router: Router<Any>): Promise<boolean> {
         const { route } = this;
-        const paralellPromises = [];
+        const paralellPromises: Promise<Any>[] = [];
         let notFoundSignal = false;
         const stack = route.getParents();
+        let promise = Promise.resolve({});
         for (let i = 0; i < stack.length; i++) {
             const route = stack[i];
-            const promise = Promise.resolve(route.resolve(router)).then(data => {
+            promise = Promise.resolve(route.resolve(router, promise)).then(data => {
                 if (data === false) {
                     notFoundSignal = true;
                 }

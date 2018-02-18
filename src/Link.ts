@@ -46,7 +46,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
 
     getUrl() {
         const { to } = this.props;
-        return this.router.toUrl(to.route, to.params);
+        return this.router.toUrl(to.route, to.params, to.options);
     }
 
     onClick = (e: React.MouseEvent<{}>) => {
