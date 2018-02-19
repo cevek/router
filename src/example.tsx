@@ -1,12 +1,11 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
-import { Path } from './Path';
-import { PublicRoute, RouteJson, createRoute } from './Route';
 import { Link } from './Link';
 import { RouteProps, ResolveProps } from './Helpers';
 import { RouterProvider } from './RouterProvider';
 import { BrowserHistory } from './History';
 import { Router } from './Router';
+import { createRoute } from './Route';
 
 class Store {
     foo = 1;
@@ -48,8 +47,10 @@ const route = createRoute(
         },
         any: {},
     },
-    () => ({} as Store),
-    () => ({} as LocalStore)
+    {
+        store: {} as Store,
+        localStore: {} as LocalStore,
+    }
 );
 
 console.log(route);

@@ -43,10 +43,14 @@ export const routeProps: (keyof RouteJson)[] = [
     'any',
     'component',
 ];
+
+export interface RootConfig<Store, LocalStore> {
+    store?: Store;
+    localStore?: LocalStore;
+}
 export function createRoute<T extends RouteJson, Store, LocalStore>(
     t: T,
-    store?: () => Store,
-    localStore?: () => LocalStore
+    config?: RootConfig<Store, LocalStore>
 ) {
     const innerRoute = new InnerRoute(t, undefined!, {}, false, false);
     return (innerRoute.publicRoute as {}) as ConvertToRoute<T, RouteType<T>, {}, Store, LocalStore, typeof routeProps>;

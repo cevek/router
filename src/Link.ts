@@ -22,7 +22,8 @@ export interface LinkState {
 
 export class Link extends React.PureComponent<LinkProps, LinkState> {
     static contextTypes = { router: PropTypes.object };
-    router: Router = this.context.router;
+    //prettier-ignore
+    context!: {router: Router}
 
     state = {
         isLoading: false,
@@ -46,10 +47,13 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
 
     getUrl() {
         const { to } = this.props;
-        return this.router.toUrl(to.route, to.params, to.options);
+        const { router } = this.context;
+        return router.toUrl(to.route, to.params, to.options);
     }
 
     onClick = (e: React.MouseEvent<{}>) => {
+        const { router } = this.context;
+
         if (e.button === 0 && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
             const { stopPropagation, onEnd } = this.props;
             if (stopPropagation) {
@@ -59,7 +63,7 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
             const url = this.getUrl();
             if (url === void 0) return;
             let isLoading = true;
-            this.router.redirect(url).then(
+            router.redirect(url).then(
                 () => {
                     isLoading = false;
                     this.update(false);
@@ -80,11 +84,13 @@ export class Link extends React.PureComponent<LinkProps, LinkState> {
 
     isActive() {
         const { to, exact } = this.props;
-        const activeRoute = this.router.getState().route;
+        const { router } = this.context;
+
+        const activeRoute = router.getState().route;
         const currentRoute = to.route._route;
         return (
             (exact === true ? activeRoute === currentRoute : activeRoute.hasParent(currentRoute)) &&
-            this.router.isCurrentRouteHasSameParams(currentRoute, to.params)
+            router.isCurrentRouteHasSameParams(currentRoute, to.params)
         );
     }
 
