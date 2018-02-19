@@ -53,7 +53,7 @@ export function createRoute<T extends RouteJson, Store, LocalStore>(
     config?: RootConfig<Store, LocalStore>
 ) {
     const innerRoute = new InnerRoute(t, undefined!, {}, false, false);
-    return (innerRoute.publicRoute as {}) as ConvertToRoute<T, RouteType<T>, {}, Store, LocalStore, typeof routeProps>;
+    return (innerRoute.publicRoute as {}) as ConvertToRoute<T, RouteType<T> & {hash?: string}, {}, Store, LocalStore, typeof routeProps>;
 }
 
 export interface RouteToUrl {
@@ -63,7 +63,7 @@ export interface RouteToUrl {
     // keys: string[];
     // values: string[];
 }
-export class PublicRoute<T = {}, ParentResolve = {}, Store = {}, LocalStore = {}> {
+export class PublicRoute<Params = {}, ParentResolve = {}, Store = {}, LocalStore = {}> {
     // private $type: PublicRouter<T> = undefined!;
 
     // prettier-ignore
@@ -75,7 +75,7 @@ export class PublicRoute<T = {}, ParentResolve = {}, Store = {}, LocalStore = {}
     constructor(public _route: InnerRoute) {
         this.component = { View: createViewComponent(_route) };
     }
-    toUrl(params: T, options: RedirectOptions = {}): RouteToUrl {
+    toUrl(params: Params, options: RedirectOptions = {}): RouteToUrl {
         // const keys = Object.keys(params);
         // const values: string[] = [];
         // for (let i = 0; i < keys.length; i++) {
@@ -83,13 +83,13 @@ export class PublicRoute<T = {}, ParentResolve = {}, Store = {}, LocalStore = {}
         // }
         return { route: this, params, options };
     }
-    toUrlUsing<FromParams>(route: PublicRoute<FromParams>, params: Diff<FromParams & {}, T>, options?: {}) {
-        return this.toUrl((params as {}) as T);
+    toUrlUsing<FromParams>(route: PublicRoute<FromParams>, params: Diff<FromParams & {}, Params>, options?: {}) {
+        return this.toUrl((params as {}) as Params);
     }
 
     component: {
         View: React.ComponentClass<
-            { component: React.ComponentType<Router<T>> } | { children: React.ComponentType<Router<T>> }
+            { component: React.ComponentType<Router<Params>> } | { children: React.ComponentType<Router<Params>> }
         >;
     };
 }

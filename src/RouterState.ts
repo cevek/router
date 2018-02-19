@@ -3,7 +3,7 @@ import { PublicRoute, InnerRoute } from './Route';
 import { Router } from './Router';
 import { Any } from './Helpers';
 
-export type Params = { [key: string]: string };
+export type Params = { [key: string]: string; hash: string; };
 
 export class RouterState {
     static id = 0;

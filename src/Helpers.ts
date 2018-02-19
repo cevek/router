@@ -12,7 +12,7 @@ export type ConvertToRoute<Json, ParentParams, ParentResolve, Store, LocalStore,
     [P in keyof Omit<Json, OmitProps>]: 
         // P extends 'resolve' ? Json[P] :
         P extends 'component' 
-            ? Record<keyof Json[P], React.ComponentClass<{}>> 
+            ? Record<keyof Json[P], React.ComponentClass<{}>>
             : ConvertToRoute<Json[P], RouteType<Json> & ParentParams, RouteResolve<Json>, Store, LocalStore, OmitProps>
 } & PublicRoute<RouteType<Json> & ParentParams, ParentResolve, Store, LocalStore>
 

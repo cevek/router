@@ -3,29 +3,27 @@ import { Diff, Any } from './Helpers';
 import { Listeners } from './Listeners';
 import { UrlHistory } from './History';
 import { UrlParams } from './Path';
-import { RouterState } from './RouterState';
+import { RouterState, Params } from './RouterState';
 import { InnerRoute, PublicRoute } from './Route';
 import { PromiseBox } from './PromiseUtils';
 
 export interface RedirectOptions {
     replace?: boolean;
-    hash?: string;
 }
 
-export interface PublicRouter<T = {}> {
-    beforeUpdate: Listeners<PublicRouter<T>>;
-    afterUpdate: Listeners<PublicRouter<T>>;
-    params: T;
-    hash: string;
+export interface PublicRouter<Params = {}> {
+    beforeUpdate: Listeners<void>;
+    afterUpdate: Listeners<void>;
+    params: Params;
     redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<void>;
-    redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<T, SubParams & {}>, options?: {}): Promise<void>;
+    redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<Params, SubParams & {}>, options?: {}): Promise<void>;
     redirect(route: string, options?: {}): Promise<void>;
 }
 
 export class Router<T = {}> implements PublicRouter<T> {
-    beforeUpdate = new Listeners<PublicRouter<T>>();
-    beforeCommit = new Listeners<PublicRouter<T>>();
-    afterUpdate = new Listeners<PublicRouter<T>>();
+    beforeUpdate = new Listeners<void>();
+    beforeCommit = new Listeners<void>();
+    afterUpdate = new Listeners<void>();
 
     externalState: {} = {};
     private routes: InnerRoute[] = [];
@@ -56,13 +54,13 @@ export class Router<T = {}> implements PublicRouter<T> {
     redirect(route: string, options?: RedirectOptions): Promise<void>;
     redirect(route: string | PublicRoute, params: {}, options: RedirectOptions = {}) {
         return this.changeUrl(
-            typeof route === 'string' ? route : this.toUrl(route, params, options),
+            typeof route === 'string' ? route : this.toUrl(route, params as Params, options),
             !!options.replace
         );
     }
 
-    toUrl(route: PublicRoute, params: {}, options: RedirectOptions = {}) {
-        return route._route.path.toUrl({ ...this.state.urlParams.pathParams, ...params }, options.hash);
+    toUrl(route: PublicRoute, params: Params, options: RedirectOptions = {}) {
+        return route._route.path.toUrl({ ...this.state.urlParams.pathParams, ...params });
     }
 
     constructor(indexRoute: PublicRoute, urlHistory: UrlHistory) {
@@ -94,7 +92,7 @@ export class Router<T = {}> implements PublicRouter<T> {
             this.promiseBox.resolve();
             return Promise.resolve();
         }
-        this.beforeUpdate.call(this);
+        this.beforeUpdate.call(void 0);
         state.resolveStack(this).then(
             notFoundSignal => {
                 if (state.isActual()) {
@@ -161,14 +159,14 @@ export class Router<T = {}> implements PublicRouter<T> {
         if (state !== void 0) {
             this.state = state;
         }
-        this.afterUpdate.call(this);
+        this.afterUpdate.call(void 0);
     }
 
     private setState(state: RouterState, replace: boolean) {
-        this.beforeCommit.call(this);
+        this.beforeCommit.call(void 0);
         this.urlHistory.setUrl(state.url, replace);
         this.state = state;
-        this.afterUpdate.call(this);
+        this.afterUpdate.call(void 0);
         this.promiseBox.resolve();
     }
 

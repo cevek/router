@@ -91,8 +91,8 @@ export class Path {
             pathValues,
             searchParams,
             searchValues,
-            params: { ...pathParams, ...searchParams },
-            values: [...pathValues, ...searchValues],
+            params: { ...pathParams, ...searchParams, hash },
+            values: [...pathValues, ...searchValues, hash],
             hash,
         };
     }
@@ -140,7 +140,7 @@ export class Path {
         };
     }
 
-    toUrl(params: { [name: string]: string | number }, hash?: string) {
+    toUrl(params: { [name: string]: string | number }) {
         let url = '';
         for (let i = 0; i < this.parts.length; i++) {
             const part = this.parts[i];
@@ -167,8 +167,8 @@ export class Path {
         }
         if (url === '') url = '/';
         url = url + search;
-        if (typeof hash === 'string') {
-            url += '#' + hash;
+        if (typeof params.hash === 'string') {
+            url += '#' + params.hash;
         }
         return url;
     }
