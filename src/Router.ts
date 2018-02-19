@@ -15,9 +15,13 @@ export interface PublicRouter<Params = {}> {
     beforeUpdate: Listeners<void>;
     afterUpdate: Listeners<void>;
     params: Params;
-    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<void>;
-    redirect<SubParams>(route: PublicRoute<SubParams>, params: Diff<Params, SubParams & {}>, options?: {}): Promise<void>;
-    redirect(route: string, options?: {}): Promise<void>;
+    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: {}): Promise<{}>;
+    redirect<SubParams>(
+        route: PublicRoute<SubParams>,
+        params: Diff<Params, SubParams & {}>,
+        options?: {}
+    ): Promise<{}>;
+    redirect(route: string, options?: {}): Promise<{}>;
 }
 
 export class Router<T = {}> implements PublicRouter<T> {
@@ -30,7 +34,7 @@ export class Router<T = {}> implements PublicRouter<T> {
     private indexRoute: InnerRoute;
     private urlHistory: UrlHistory;
     private inited = false;
-    private promiseBox = new PromiseBox<void>();
+    private promiseBox = new PromiseBox<{}>();
     private state = new RouterState({
         url: undefined!,
         route: undefined!,
@@ -45,14 +49,7 @@ export class Router<T = {}> implements PublicRouter<T> {
         return this.state.urlParams.hash;
     }
 
-    redirect<SubParams extends undefined>(route: PublicRoute<SubParams>, options?: RedirectOptions): Promise<void>;
-    redirect<SubParams>(
-        route: PublicRoute<SubParams>,
-        params: Diff<T, SubParams & {}>,
-        options?: RedirectOptions
-    ): Promise<void>;
-    redirect(route: string, options?: RedirectOptions): Promise<void>;
-    redirect(route: string | PublicRoute, params: {}, options: RedirectOptions = {}) {
+    redirect(route: string | PublicRoute, params?: {}, options: RedirectOptions = {}): Promise<{}> {
         return this.changeUrl(
             typeof route === 'string' ? route : this.toUrl(route, params as Params, options),
             !!options.replace
@@ -84,13 +81,13 @@ export class Router<T = {}> implements PublicRouter<T> {
         return this.changeUrl(this.urlHistory.getCurrentUrl(), false);
     }
 
-    private changeUrl = (url: string, replace: boolean, startFromRouteIdx = 0): Promise<void> => {
+    private changeUrl = (url: string, replace: boolean, startFromRouteIdx = 0): Promise<{}> => {
         this.promiseBox.createIfEmpty();
         const { state, offset } = this.makeStateFromUrl(url, startFromRouteIdx);
         if (state === void 0) {
             this.urlHistory.setUrl(this.state.url, true);
             this.promiseBox.resolve();
-            return Promise.resolve();
+            return Promise.resolve({});
         }
         this.beforeUpdate.call(void 0);
         state.resolveStack(this).then(

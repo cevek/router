@@ -11,7 +11,7 @@ export class PromiseHandle<T = {}> {
 export class PromiseBox<T> {
     private promiseHandle?: PromiseHandle<T>;
     getPromise() {
-        return this.promiseHandle !== void 0 ? this.promiseHandle.promise : Promise.resolve();
+        return this.promiseHandle !== void 0 ? this.promiseHandle.promise : Promise.resolve({});
     }
     createIfEmpty() {
         if (this.promiseHandle === void 0) {

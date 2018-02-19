@@ -23,7 +23,7 @@ export class RouterState {
         return this.id === RouterState.id - 1;
     }
 
-    resolveStack(router: Router<Any>): Promise<boolean> {
+    resolveStack(router: Router<Any>): Promise<Any> {
         const { route } = this;
         const paralellPromises: Promise<Any>[] = [];
         let notFoundSignal = false;
